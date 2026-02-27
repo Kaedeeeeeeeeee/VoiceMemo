@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Watch Recording History</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script>
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        primary: "#ffffff", 
+                        "glass-bg": "rgba(255, 255, 255, 0.08)",
+                        "glass-border": "rgba(255, 255, 255, 0.12)",
+                        "glass-highlight": "rgba(255, 255, 255, 0.2)",
+                        "background-dark": "#050505",
+                        "accent-purple": "#a855f7", 
+                    },
+                    fontFamily: {
+                        display: ["Inter", "sans-serif"],
+                    },
+                    boxShadow: {
+                        'glass': '0 4px 30px rgba(0, 0, 0, 0.1)',
+                        'glass-inset': 'inset 0 0 0 1px rgba(255, 255, 255, 0.1)',
+                        'glass-glow': '0 0 20px rgba(255, 255, 255, 0.05)',
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+        body {
+            background-color: #000000;
+            background-image: 
+                radial-gradient(at 0% 0%, rgba(50, 50, 50, 0.4) 0px, transparent 50%),
+                radial-gradient(at 100% 100%, rgba(30, 30, 30, 0.4) 0px, transparent 50%);
+            background-attachment: fixed;
+        }
+        .glass-card {
+            background: linear-gradient(145deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.03) 100%);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-top: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+        }
+        .glass-header {
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        .chip-active {
+            background: rgba(255, 255, 255, 1);
+            color: #000;
+            box-shadow: 0 0 15px rgba(255, 255, 255, 0.3);
+        }
+        .chip-inactive {
+            background: rgba(255, 255, 255, 0.1);
+            color: rgba(255, 255, 255, 0.7);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="text-white font-display min-h-screen flex flex-col antialiased selection:bg-white/30">
+<header class="sticky top-0 z-50 glass-header px-4 pt-14 pb-4 transition-all duration-300">
+<div class="flex items-center justify-between mb-6">
+<h1 class="text-3xl font-semibold tracking-tight text-white drop-shadow-md">History</h1>
+<button class="p-2.5 rounded-full hover:bg-white/10 transition-colors text-white/80 active:scale-95 duration-200">
+<span class="material-symbols-outlined text-2xl font-light">search</span>
+</button>
+</div>
+<div class="flex gap-3 overflow-x-auto no-scrollbar pb-2 mask-linear">
+<button class="flex h-8 shrink-0 items-center justify-center px-4 rounded-full chip-active font-medium text-xs tracking-wide transition-all hover:scale-105 active:scale-95">
+                All
+            </button>
+<button class="flex h-8 shrink-0 items-center justify-center px-4 rounded-full chip-inactive font-medium text-xs tracking-wide hover:bg-white/20 transition-all hover:scale-105 active:scale-95">
+<span class="material-symbols-outlined text-[16px] mr-1.5 opacity-80">auto_awesome</span>
+                Summarized
+            </button>
+<button class="flex h-8 shrink-0 items-center justify-center px-4 rounded-full chip-inactive font-medium text-xs tracking-wide hover:bg-white/20 transition-all hover:scale-105 active:scale-95">
+                Favorites
+            </button>
+<button class="flex h-8 shrink-0 items-center justify-center px-4 rounded-full chip-inactive font-medium text-xs tracking-wide hover:bg-white/20 transition-all hover:scale-105 active:scale-95">
+                Watch Imports
+            </button>
+</div>
+</header>
+<main class="flex-1 px-4 py-6 space-y-8 pb-32">
+<section>
+<h2 class="text-[11px] font-medium uppercase tracking-[0.2em] text-white/40 mb-3 px-1 ml-1">Today</h2>
+<div class="space-y-3">
+<div class="group relative flex items-center justify-between p-4 rounded-[1.25rem] glass-card transition-all duration-300 hover:bg-white/10 hover:-translate-y-0.5 cursor-pointer">
+<div class="flex items-center gap-4">
+<div class="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/5 border border-white/10 text-white">
+<span class="material-symbols-outlined text-xl font-light">graphic_eq</span>
+<div class="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-white shadow-[0_0_10px_rgba(255,255,255,0.4)]">
+<span class="material-symbols-outlined text-[10px] text-black font-bold">auto_awesome</span>
+</div>
+</div>
+<div class="flex flex-col">
+<h3 class="text-[15px] font-medium leading-snug mb-0.5 text-white/95 group-hover:text-white transition-colors">Q3 Design Sync</h3>
+<div class="flex items-center gap-2 text-xs text-white/50 group-hover:text-white/70 transition-colors font-light tracking-wide">
+<span>10:00 AM</span>
+<span class="h-0.5 w-0.5 rounded-full bg-white/40"></span>
+<span>45 min</span>
+</div>
+</div>
+</div>
+<div class="flex items-center pl-2">
+<span class="material-symbols-outlined text-white/20 group-hover:text-white/60 transition-colors text-xl">chevron_right</span>
+</div>
+</div>
+<div class="group relative flex items-center justify-between p-4 rounded-[1.25rem] glass-card transition-all duration-300 hover:bg-white/10 hover:-translate-y-0.5 cursor-pointer">
+<div class="flex items-center gap-4">
+<div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/5 border border-white/10 text-white/70">
+<span class="material-symbols-outlined text-xl font-light">mic</span>
+</div>
+<div class="flex flex-col">
+<h3 class="text-[15px] font-medium leading-snug mb-0.5 text-white/95 group-hover:text-white transition-colors">Client Briefing</h3>
+<div class="flex items-center gap-2 text-xs text-white/50 group-hover:text-white/70 transition-colors font-light tracking-wide">
+<span>1:30 PM</span>
+<span class="h-0.5 w-0.5 rounded-full bg-white/40"></span>
+<span>12 min</span>
+</div>
+</div>
+</div>
+<div class="flex items-center gap-3">
+<div class="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/5 border border-white/10 backdrop-blur-sm">
+<span class="block h-1.5 w-1.5 rounded-full bg-white animate-pulse shadow-[0_0_8px_rgba(255,255,255,0.8)]"></span>
+<span class="text-[10px] font-medium text-white/80 uppercase tracking-wider">Processing</span>
+</div>
+</div>
+</div>
+</div>
+</section>
+<section>
+<h2 class="text-[11px] font-medium uppercase tracking-[0.2em] text-white/40 mb-3 px-1 ml-1">Yesterday</h2>
+<div class="space-y-3">
+<div class="group relative flex items-center justify-between p-4 rounded-[1.25rem] glass-card transition-all duration-300 hover:bg-white/10 hover:-translate-y-0.5 cursor-pointer">
+<div class="flex items-center gap-4">
+<div class="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/5 border border-white/10 text-white">
+<span class="material-symbols-outlined text-xl font-light">graphic_eq</span>
+<div class="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-white shadow-[0_0_10px_rgba(255,255,255,0.4)]">
+<span class="material-symbols-outlined text-[10px] text-black font-bold">auto_awesome</span>
+</div>
+</div>
+<div class="flex flex-col">
+<h3 class="text-[15px] font-medium leading-snug mb-0.5 text-white/95 group-hover:text-white transition-colors">Product Brainstorm</h3>
+<div class="flex items-center gap-2 text-xs text-white/50 group-hover:text-white/70 transition-colors font-light tracking-wide">
+<span>4:15 PM</span>
+<span class="h-0.5 w-0.5 rounded-full bg-white/40"></span>
+<span>1h 20m</span>
+</div>
+</div>
+</div>
+<div class="flex items-center pl-2">
+<span class="material-symbols-outlined text-white/20 group-hover:text-white/60 transition-colors text-xl">chevron_right</span>
+</div>
+</div>
+<div class="group relative flex items-center justify-between p-4 rounded-[1.25rem] glass-card transition-all duration-300 hover:bg-white/10 hover:-translate-y-0.5 cursor-pointer">
+<div class="flex items-center gap-4">
+<div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/5 border border-white/10 text-white/70">
+<span class="material-symbols-outlined text-xl font-light">mic</span>
+</div>
+<div class="flex flex-col">
+<h3 class="text-[15px] font-medium leading-snug mb-0.5 text-white/95 group-hover:text-white transition-colors">Quick Note: Grocery List</h3>
+<div class="flex items-center gap-2 text-xs text-white/50 group-hover:text-white/70 transition-colors font-light tracking-wide">
+<span>9:05 AM</span>
+<span class="h-0.5 w-0.5 rounded-full bg-white/40"></span>
+<span>45s</span>
+</div>
+</div>
+</div>
+<div class="flex items-center pl-2">
+<span class="material-symbols-outlined text-white/20 group-hover:text-white/60 transition-colors text-xl">chevron_right</span>
+</div>
+</div>
+</div>
+</section>
+<section>
+<h2 class="text-[11px] font-medium uppercase tracking-[0.2em] text-white/40 mb-3 px-1 ml-1">Last Week</h2>
+<div class="space-y-3">
+<div class="group relative flex items-center justify-between p-4 rounded-[1.25rem] glass-card transition-all duration-300 hover:bg-white/10 hover:-translate-y-0.5 cursor-pointer">
+<div class="flex items-center gap-4">
+<div class="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/5 border border-white/10 text-white">
+<span class="material-symbols-outlined text-xl font-light">graphic_eq</span>
+<div class="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-white shadow-[0_0_10px_rgba(255,255,255,0.4)]">
+<span class="material-symbols-outlined text-[10px] text-black font-bold">auto_awesome</span>
+</div>
+</div>
+<div class="flex flex-col">
+<h3 class="text-[15px] font-medium leading-snug mb-0.5 text-white/95 group-hover:text-white transition-colors">Monthly Review</h3>
+<div class="flex items-center gap-2 text-xs text-white/50 group-hover:text-white/70 transition-colors font-light tracking-wide">
+<span>Oct 24</span>
+<span class="h-0.5 w-0.5 rounded-full bg-white/40"></span>
+<span>32 min</span>
+</div>
+</div>
+</div>
+<div class="flex items-center pl-2">
+<span class="material-symbols-outlined text-white/20 group-hover:text-white/60 transition-colors text-xl">chevron_right</span>
+</div>
+</div>
+</div>
+</section>
+</main>
+<div class="fixed bottom-24 right-5 z-40">
+<button class="flex h-16 w-16 items-center justify-center rounded-full bg-white text-black shadow-[0_0_25px_rgba(255,255,255,0.3)] hover:scale-105 active:scale-95 transition-all">
+<span class="material-symbols-outlined text-3xl">mic</span>
+</button>
+</div>
+<nav class="fixed bottom-0 left-0 w-full z-40 bg-black/80 backdrop-blur-xl border-t border-white/10 pb-safe pt-2">
+<div class="flex justify-around items-end pb-6 px-4">
+<a class="flex flex-1 flex-col items-center justify-center gap-1.5 text-white" href="#">
+<span class="material-symbols-outlined text-[24px] fill-current drop-shadow-[0_0_8px_rgba(255,255,255,0.5)]">graphic_eq</span>
+<span class="text-[10px] font-medium tracking-wider opacity-90">Recordings</span>
+</a>
+<a class="flex flex-1 flex-col items-center justify-center gap-1.5 text-white/40 hover:text-white transition-colors duration-300" href="#">
+<span class="material-symbols-outlined text-[24px]">smart_toy</span>
+<span class="text-[10px] font-medium tracking-wider">Assistant</span>
+</a>
+<a class="flex flex-1 flex-col items-center justify-center gap-1.5 text-white/40 hover:text-white transition-colors duration-300" href="#">
+<span class="material-symbols-outlined text-[24px]">watch</span>
+<span class="text-[10px] font-medium tracking-wider">Devices</span>
+</a>
+<a class="flex flex-1 flex-col items-center justify-center gap-1.5 text-white/40 hover:text-white transition-colors duration-300" href="#">
+<span class="material-symbols-outlined text-[24px]">settings</span>
+<span class="text-[10px] font-medium tracking-wider">Settings</span>
+</a>
+</div>
+</nav>
+
+</body></html>
