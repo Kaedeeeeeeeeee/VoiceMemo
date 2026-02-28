@@ -79,6 +79,10 @@
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		AABB00012F51B7000011BE60 /* Shared */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				CCDD00012F51B7000011BE60 /* PBXFileSystemSynchronizedBuildFileExceptionSet */,
+				CCDD00022F51B7000011BE60 /* PBXFileSystemSynchronizedBuildFileExceptionSet */,
+			);
 			path = Shared;
 			sourceTree = "<group>";
 		};
@@ -108,6 +112,23 @@
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		CCDD00012F51B7000011BE60 /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Services/APIConfig.template.swift,
+			);
+			target = AABB00062F51B7000011BE60 /* VoiceMemo iOS */;
+		};
+		CCDD00022F51B7000011BE60 /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Services/APIConfig.template.swift,
+			);
+			target = CED10E592F51B6D00011BE60 /* VoiceMemo Watch App */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		AABB00092F51B7000011BE60 /* Frameworks */ = {

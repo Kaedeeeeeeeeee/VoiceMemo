@@ -26,6 +26,7 @@
                         'glass-concave': 'inset 5px 5px 10px rgba(0, 0, 0, 0.5), inset -5px -5px 10px rgba(255, 255, 255, 0.05)',
                         'glass-convex': '5px 5px 15px rgba(0, 0, 0, 0.5), -2px -2px 10px rgba(255, 255, 255, 0.05)',
                         'glow': '0 0 20px rgba(255, 255, 255, 0.15)',
+                        'mic-emboss': 'inset 1px 1px 2px rgba(0,0,0,0.8), inset -1px -1px 2px rgba(255,255,255,0.1), 0 0 10px rgba(255,255,255,0.05)',
                     }
                 },
             },
@@ -66,7 +67,19 @@
         .soft-text-glow {
             text-shadow: 0 0 10px rgba(255,255,255,0.3);
         }
+        .mic-icon-glass {
+            background: linear-gradient(145deg, rgba(255,255,255,0.15) 0%, rgba(255,255,255,0.02) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 0px 2px 4px rgba(0,0,0,0.8), 0px -1px 1px rgba(255,255,255,0.2);
+            filter: drop-shadow(0 0 8px rgba(255,255,255,0.15));
+        }
     </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
 <style>
     body {
       min-height: max(884px, 100dvh);
@@ -103,8 +116,10 @@
 <div class="absolute w-64 h-64 rounded-full border border-white/5 opacity-50"></div>
 <div class="absolute w-52 h-52 rounded-full border border-white/5 opacity-80"></div>
 <button class="relative flex items-center justify-center w-40 h-40 rounded-full glass-button-concave text-white hover:scale-[1.02] active:scale-[0.98] transition-all duration-500 z-20 group">
-<div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-16 h-16 rounded-full bg-black shadow-[inset_2px_2px_5px_#000,inset_-2px_-2px_5px_#1a1a1a] flex items-center justify-center">
-<div class="w-6 h-6 rounded-full bg-white shadow-[0_0_10px_2px_rgba(255,255,255,0.4)] group-hover:bg-red-500 group-hover:shadow-[0_0_15px_2px_rgba(220,38,38,0.4)] transition-all duration-500"></div>
+<div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-20 h-20 rounded-full bg-[#0a0a0a] shadow-[inset_3px_3px_6px_#000,inset_-3px_-3px_6px_#1f1f1f] flex items-center justify-center border border-white/5">
+<span class="material-symbols-outlined text-[40px] mic-icon-glass opacity-90 group-hover:opacity-100 group-hover:scale-110 transition-all duration-500 group-hover:text-shadow-[0_0_15px_rgba(255,255,255,0.4)]">
+                        mic
+                    </span>
 </div>
 <div class="absolute inset-0 rounded-full bg-gradient-to-br from-white/5 to-transparent pointer-events-none"></div>
 </button>
@@ -152,5 +167,4 @@
 </a>
 </div>
 </nav>
-
 </body></html>

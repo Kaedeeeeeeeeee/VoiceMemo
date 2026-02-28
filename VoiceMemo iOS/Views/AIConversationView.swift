@@ -22,11 +22,18 @@ struct AIConversationView: View {
     var body: some View {
         VStack(spacing: 0) {
             if recording.transcription == nil {
-                ContentUnavailableView {
-                    Label("请先完成语音转写", systemImage: "text.badge.xmark")
-                } description: {
+                VStack(spacing: 16) {
+                    Image(systemName: "text.badge.xmark")
+                        .font(.system(size: 40))
+                        .foregroundStyle(GlassTheme.textMuted)
+                    Text("请先完成语音转写")
+                        .font(.headline)
+                        .foregroundStyle(GlassTheme.textSecondary)
                     Text("AI 对话需要基于转写文本")
+                        .font(.subheadline)
+                        .foregroundStyle(GlassTheme.textTertiary)
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if messages.isEmpty {
                 suggestionsView
             } else {
@@ -39,7 +46,12 @@ struct AIConversationView: View {
                     .lineLimit(1...5)
                     .padding(.horizontal, 16)
                     .padding(.vertical, 10)
-                    .background(Color(.systemGray6), in: Capsule())
+                    .foregroundStyle(GlassTheme.textPrimary)
+                    .background(GlassTheme.surfaceLight, in: Capsule())
+                    .overlay(
+                        Capsule()
+                            .stroke(GlassTheme.borderSubtle, lineWidth: 0.5)
+                    )
                     .disabled(recording.transcription == nil)
 
                 Button {
@@ -48,14 +60,14 @@ struct AIConversationView: View {
                     Image(systemName: "arrow.up.circle.fill")
                         .font(.system(size: 32))
                         .symbolRenderingMode(.palette)
-                        .foregroundStyle(.white, canSend ? .blue : Color(.systemGray4))
+                        .foregroundStyle(.white, canSend ? GlassTheme.accent : GlassTheme.surfaceMedium)
                 }
                 .disabled(!canSend)
             }
             .padding(.horizontal)
             .padding(.vertical, 8)
-            .background(.background)
         }
+        .background(Color.clear)
     }
 
     private var canSend: Bool {
@@ -67,12 +79,12 @@ struct AIConversationView: View {
             VStack(spacing: 16) {
                 Image(systemName: "bubble.left.and.bubble.right")
                     .font(.system(size: 36))
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(GlassTheme.textMuted)
                     .padding(.top, 24)
 
                 Text("针对录音内容提问")
                     .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(GlassTheme.textTertiary)
 
                 let suggestions = [
                     "这段录音的主要内容是什么？",
@@ -89,15 +101,12 @@ struct AIConversationView: View {
                         } label: {
                             Text(suggestion)
                                 .font(.subheadline)
+                                .foregroundStyle(GlassTheme.textSecondary)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .padding(.horizontal, 16)
                                 .padding(.vertical, 12)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 16)
-                                        .stroke(Color(.systemGray4), lineWidth: 1)
-                                )
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(GlassButtonStyle(fill: GlassTheme.surfaceLight))
                     }
                 }
             }
@@ -110,15 +119,16 @@ struct AIConversationView: View {
             ScrollView {
                 LazyVStack(spacing: 12) {
                     ForEach(messages) { message in
-                        MessageBubble(message: message)
+                        GlassMessageBubble(message: message)
                             .id(message.id)
                     }
 
                     if isLoading {
                         HStack {
                             ProgressView()
+                                .tint(GlassTheme.accent)
                                 .padding(12)
-                                .background(.fill, in: RoundedRectangle(cornerRadius: 12))
+                                .glassCard(radius: 12)
                             Spacer()
                         }
                         .padding(.horizontal)
@@ -165,7 +175,7 @@ struct AIConversationView: View {
     }
 }
 
-struct MessageBubble: View {
+struct GlassMessageBubble: View {
     let message: ChatMessage
 
     var body: some View {
@@ -173,12 +183,24 @@ struct MessageBubble: View {
             if message.role == .user { Spacer(minLength: 60) }
 
             Text(message.content)
+                .font(.body)
                 .padding(12)
+                .foregroundStyle(GlassTheme.textPrimary)
                 .background(
-                    message.role == .user ? Color.blue : Color(.systemGray5),
-                    in: RoundedRectangle(cornerRadius: 12)
+                    message.role == .user
+                        ? GlassTheme.accent.opacity(0.3)
+                        : GlassTheme.surfaceLight,
+                    in: RoundedRectangle(cornerRadius: 16)
                 )
-                .foregroundStyle(message.role == .user ? .white : .primary)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16)
+                        .stroke(
+                            message.role == .user
+                                ? GlassTheme.accent.opacity(0.2)
+                                : GlassTheme.borderSubtle,
+                            lineWidth: 0.5
+                        )
+                )
 
             if message.role == .assistant { Spacer(minLength: 60) }
         }

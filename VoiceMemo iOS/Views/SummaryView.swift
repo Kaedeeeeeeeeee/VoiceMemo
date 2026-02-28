@@ -64,83 +64,136 @@ struct SummaryView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 if recording.isSummarizing {
-                    ProgressView("正在生成摘要...")
-                        .frame(maxWidth: .infinity)
-                        .padding(.top, 40)
+                    VStack(spacing: 16) {
+                        ProgressView()
+                            .tint(GlassTheme.accent)
+                            .scaleEffect(1.2)
+                        Text("正在生成摘要...")
+                            .font(.subheadline)
+                            .foregroundStyle(GlassTheme.textSecondary)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 40)
+                    .glassCard()
+                    .padding()
                 } else if let summary = recording.summary {
+                    // AI badge
+                    HStack(spacing: 6) {
+                        Image(systemName: "sparkles")
+                            .font(.caption2)
+                            .foregroundStyle(GlassTheme.accent)
+                        Text("AI 生成")
+                            .font(.caption2)
+                            .fontWeight(.medium)
+                            .foregroundStyle(GlassTheme.accent)
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 4)
+                    .glassCard(radius: 10, fill: GlassTheme.accent.opacity(0.15))
+                    .padding(.horizontal)
+
                     // Template selector
                     ScrollView(.horizontal, showsIndicators: false) {
-                        HStack {
+                        HStack(spacing: 8) {
                             ForEach(SummaryTemplate.allCases) { template in
-                                Button {
+                                GlassChip(
+                                    title: template.rawValue,
+                                    isActive: selectedTemplate == template
+                                ) {
                                     selectedTemplate = template
                                     regenerateSummary()
-                                } label: {
-                                    Label(template.rawValue, systemImage: template.icon)
-                                        .font(.caption)
                                 }
-                                .buttonStyle(.bordered)
-                                .tint(selectedTemplate == template ? .blue : .secondary)
                             }
                         }
                         .padding(.horizontal)
                     }
 
-                    if let attributed = try? AttributedString(markdown: summary) {
-                        Text(attributed)
-                            .font(.body)
-                            .textSelection(.enabled)
-                            .padding()
-                    } else {
-                        Text(summary)
-                            .font(.body)
-                            .textSelection(.enabled)
-                            .padding()
+                    // Summary content
+                    VStack(alignment: .leading) {
+                        if let attributed = try? AttributedString(markdown: summary) {
+                            Text(attributed)
+                                .font(.body)
+                                .foregroundStyle(GlassTheme.textSecondary)
+                                .textSelection(.enabled)
+                        } else {
+                            Text(summary)
+                                .font(.body)
+                                .foregroundStyle(GlassTheme.textSecondary)
+                                .textSelection(.enabled)
+                        }
                     }
+                    .padding()
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .glassCard()
+                    .padding(.horizontal)
                 } else if let error {
-                    ContentUnavailableView {
-                        Label("生成失败", systemImage: "exclamationmark.triangle")
-                    } description: {
+                    VStack(spacing: 16) {
+                        Image(systemName: "exclamationmark.triangle")
+                            .font(.largeTitle)
+                            .foregroundStyle(GlassTheme.accent)
+                        Text("生成失败")
+                            .font(.headline)
+                            .foregroundStyle(GlassTheme.textPrimary)
                         Text(error)
-                    } actions: {
+                            .font(.caption)
+                            .foregroundStyle(GlassTheme.textTertiary)
+                            .multilineTextAlignment(.center)
                         Button("重试") {
                             self.error = nil
                             generateSummary()
                         }
+                        .buttonStyle(GlassButtonStyle(fill: GlassTheme.accent.opacity(0.3)))
+                        .foregroundStyle(GlassTheme.accent)
                     }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 40)
+                    .padding(.horizontal)
                 } else {
                     noTranscriptState
                 }
             }
         }
+        .background(Color.clear)
     }
 
     private var noTranscriptState: some View {
         VStack(spacing: 16) {
             if recording.transcription == nil {
                 Image(systemName: "text.badge.xmark")
-                    .font(.largeTitle)
-                    .foregroundStyle(.secondary)
+                    .font(.system(size: 40))
+                    .foregroundStyle(GlassTheme.textMuted)
                 Text("请先完成语音转写")
                     .font(.headline)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(GlassTheme.textSecondary)
             } else {
                 Image(systemName: "sparkles")
-                    .font(.largeTitle)
-                    .foregroundStyle(.secondary)
+                    .font(.system(size: 40))
+                    .foregroundStyle(GlassTheme.textMuted)
 
                 Text("选择摘要模板")
                     .font(.headline)
+                    .foregroundStyle(GlassTheme.textSecondary)
 
-                ForEach(SummaryTemplate.allCases) { template in
-                    Button {
-                        selectedTemplate = template
-                        generateSummary()
-                    } label: {
-                        Label(template.rawValue, systemImage: template.icon)
-                            .frame(maxWidth: .infinity, alignment: .leading)
+                VStack(spacing: 10) {
+                    ForEach(SummaryTemplate.allCases) { template in
+                        Button {
+                            selectedTemplate = template
+                            generateSummary()
+                        } label: {
+                            HStack(spacing: 10) {
+                                Image(systemName: template.icon)
+                                    .foregroundStyle(GlassTheme.accent)
+                                Text(template.rawValue)
+                                    .foregroundStyle(GlassTheme.textPrimary)
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                                    .font(.caption)
+                                    .foregroundStyle(GlassTheme.textMuted)
+                            }
+                            .padding()
+                        }
+                        .buttonStyle(GlassButtonStyle(fill: GlassTheme.surfaceLight))
                     }
-                    .buttonStyle(.bordered)
                 }
             }
         }

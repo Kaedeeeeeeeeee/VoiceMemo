@@ -7,8 +7,9 @@ struct VoiceMemoiOSApp: App {
 
     var body: some Scene {
         WindowGroup {
-            RecordingListView()
+            MainTabView()
                 .environment(connectivity)
+                .preferredColorScheme(.dark)
         }
         .modelContainer(for: Recording.self)
     }

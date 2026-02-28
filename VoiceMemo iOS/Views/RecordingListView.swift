@@ -1,83 +1,130 @@
 import SwiftUI
 import SwiftData
 
-struct RecordingListView: View {
+// MARK: - Filter
+
+private enum RecordingFilter: String, CaseIterable {
+    case all = "全部"
+    case hasSummary = "已摘要"
+    case favorites = "收藏"
+    case watch = "Watch"
+}
+
+// MARK: - Date Group
+
+private enum DateGroup: String, CaseIterable {
+    case today = "今天"
+    case yesterday = "昨天"
+    case lastWeek = "上周"
+    case earlier = "更早"
+}
+
+// MARK: - Main View
+
+struct RecordingHistoryView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \Recording.date, order: .reverse) private var recordings: [Recording]
-    @State private var showRecordingSheet = false
-    @State private var recorder = iOSAudioRecorder()
+    @State private var searchText = ""
+    @State private var isSearching = false
+    @State private var activeFilter: RecordingFilter = .all
     @State private var recordingToRename: Recording?
     @State private var renameText = ""
     @State private var recordingToDelete: Recording?
+    var switchToTab: (AppTab) -> Void
+
+    private var filteredRecordings: [Recording] {
+        var result = recordings
+
+        // Search filter
+        if !searchText.isEmpty {
+            result = result.filter { $0.title.localizedCaseInsensitiveContains(searchText) }
+        }
+
+        // Chip filter
+        switch activeFilter {
+        case .all: break
+        case .hasSummary:
+            result = result.filter { $0.summary != nil }
+        case .favorites:
+            break // No favorites feature yet
+        case .watch:
+            result = result.filter { $0.source == .watch }
+        }
+
+        return result
+    }
+
+    private func groupedRecordings() -> [(DateGroup, [Recording])] {
+        let calendar = Calendar.current
+        var groups: [DateGroup: [Recording]] = [:]
+
+        for recording in filteredRecordings {
+            let group: DateGroup
+            if calendar.isDateInToday(recording.date) {
+                group = .today
+            } else if calendar.isDateInYesterday(recording.date) {
+                group = .yesterday
+            } else if let weekAgo = calendar.date(byAdding: .day, value: -7, to: Date()),
+                      recording.date > weekAgo {
+                group = .lastWeek
+            } else {
+                group = .earlier
+            }
+            groups[group, default: []].append(recording)
+        }
+
+        return DateGroup.allCases.compactMap { group in
+            guard let items = groups[group], !items.isEmpty else { return nil }
+            return (group, items)
+        }
+    }
 
     var body: some View {
-        NavigationStack {
-            ZStack(alignment: .bottom) {
-                Group {
-                    if recordings.isEmpty {
-                        emptyState
-                    } else {
-                        recordingsList
-                    }
-                }
+        ZStack(alignment: .bottomTrailing) {
+            ZStack {
+                RadialBackgroundView()
 
-                // Floating record button
-                Button {
-                    showRecordingSheet = true
-                } label: {
-                    ZStack {
-                        Circle()
-                            .fill(.red)
-                            .frame(width: 64, height: 64)
-                            .shadow(color: .red.opacity(0.3), radius: 8, y: 4)
+                if filteredRecordings.isEmpty {
+                    emptyState
+                } else {
+                    recordingsList
+                }
+            }
+
+            // FAB
+            Button {
+                switchToTab(.home)
+            } label: {
+                Circle()
+                    .fill(.white)
+                    .frame(width: 56, height: 56)
+                    .overlay(
                         Image(systemName: "mic.fill")
-                            .font(.title2)
-                            .foregroundStyle(.white)
-                    }
-                }
-                .padding(.bottom, 24)
+                            .font(.title3)
+                            .foregroundStyle(.black)
+                    )
+                    .shadow(color: .white.opacity(0.15), radius: 12, y: 4)
             }
-            .navigationTitle("语音备忘")
-            .sheet(isPresented: $showRecordingSheet) {
-                iOSRecordingSheet(recorder: recorder) { url, duration in
-                    saveRecording(url: url, duration: duration)
-                }
-            }
+            .buttonStyle(.plain)
+            .padding(.trailing, 20)
+            .padding(.bottom, 20)
         }
-    }
-
-    private var emptyState: some View {
-        ContentUnavailableView {
-            Label("暂无录音", systemImage: "mic.slash")
-        } description: {
-            Text("点击下方按钮开始录音，或从 Apple Watch 同步录音")
-        }
-    }
-
-    private var recordingsList: some View {
-        List {
-            ForEach(recordings) { recording in
-                NavigationLink(destination: RecordingDetailView(recording: recording)) {
-                    RecordingListRow(recording: recording)
-                }
-                .swipeActions(edge: .trailing) {
-                    Button(role: .destructive) {
-                        recordingToDelete = recording
-                    } label: {
-                        Label("Delete", systemImage: "trash")
+        .navigationTitle("历史记录")
+        .navigationBarTitleDisplayMode(.large)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        isSearching.toggle()
+                        if !isSearching { searchText = "" }
                     }
-                }
-                .swipeActions(edge: .leading) {
-                    Button {
-                        renameText = recording.title
-                        recordingToRename = recording
-                    } label: {
-                        Label("重命名", systemImage: "pencil")
-                    }
-                    .tint(.blue)
+                } label: {
+                    Image(systemName: isSearching ? "xmark" : "magnifyingglass")
+                        .foregroundStyle(GlassTheme.textSecondary)
                 }
             }
         }
+        .toolbarBackground(.hidden, for: .navigationBar)
         .alert("确认删除", isPresented: .init(
             get: { recordingToDelete != nil },
             set: { if !$0 { recordingToDelete = nil } }
@@ -107,17 +154,115 @@ struct RecordingListView: View {
         }
     }
 
-    private func saveRecording(url: URL, duration: TimeInterval) {
-        let fileSize = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int64) ?? 0
+    // MARK: - Empty State
 
-        let recording = Recording(
-            title: Date.now.recordingTitle,
-            duration: duration,
-            fileURL: url.lastPathComponent,
-            fileSize: fileSize,
-            source: .phone
-        )
-        modelContext.insert(recording)
+    private var emptyState: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "waveform.slash")
+                .font(.system(size: 48))
+                .foregroundStyle(GlassTheme.textMuted)
+
+            Text("暂无录音")
+                .font(.title3)
+                .fontWeight(.semibold)
+                .foregroundStyle(GlassTheme.textSecondary)
+
+            Text("点击右下角按钮开始录音")
+                .font(.subheadline)
+                .foregroundStyle(GlassTheme.textMuted)
+        }
+    }
+
+    // MARK: - List
+
+    private var recordingsList: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                // Search bar
+                if isSearching {
+                    HStack(spacing: 10) {
+                        HStack(spacing: 8) {
+                            Image(systemName: "magnifyingglass")
+                                .font(.subheadline)
+                                .foregroundStyle(GlassTheme.textMuted)
+                            TextField("搜索录音", text: $searchText)
+                                .font(.subheadline)
+                                .foregroundStyle(GlassTheme.textPrimary)
+                                .tint(GlassTheme.accent)
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 10)
+                        .glassCard(radius: 12)
+
+                        Button {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                searchText = ""
+                                isSearching = false
+                            }
+                        } label: {
+                            Text("取消")
+                                .font(.subheadline)
+                                .foregroundStyle(GlassTheme.textSecondary)
+                        }
+                    }
+                    .padding(.horizontal)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                }
+
+                // Filter chips
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(RecordingFilter.allCases, id: \.rawValue) { filter in
+                            GlassChip(
+                                title: filter.rawValue,
+                                isActive: activeFilter == filter
+                            ) {
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    activeFilter = filter
+                                }
+                            }
+                        }
+                    }
+                    .padding(.horizontal)
+                }
+                .padding(.top, 8)
+
+                // Grouped recordings
+                let groups = groupedRecordings()
+                ForEach(groups, id: \.0) { group, items in
+                    Section {
+                        ForEach(items) { recording in
+                            NavigationLink(destination: RecordingDetailView(recording: recording)) {
+                                HistoryRecordingRow(recording: recording)
+                            }
+                            .buttonStyle(.plain)
+                            .swipeActions(edge: .trailing) {
+                                Button(role: .destructive) {
+                                    recordingToDelete = recording
+                                } label: {
+                                    Label("Delete", systemImage: "trash")
+                                }
+                            }
+                            .swipeActions(edge: .leading) {
+                                Button {
+                                    renameText = recording.title
+                                    recordingToRename = recording
+                                } label: {
+                                    Label("重命名", systemImage: "pencil")
+                                }
+                                .tint(.blue)
+                            }
+                        }
+                    } header: {
+                        GlassSectionHeader(title: group.rawValue)
+                            .padding(.horizontal)
+                            .padding(.top, 8)
+                    }
+                }
+            }
+            .padding(.bottom, 80)
+        }
+        .scrollContentBackground(.hidden)
     }
 
     private func deleteRecording(_ recording: Recording) {
@@ -128,136 +273,81 @@ struct RecordingListView: View {
     }
 }
 
-struct RecordingListRow: View {
+// MARK: - History Row
+
+struct HistoryRecordingRow: View {
     let recording: Recording
 
     var body: some View {
-        HStack {
+        HStack(spacing: 14) {
+            // Icon
+            ZStack {
+                Circle()
+                    .fill(GlassTheme.surfaceMedium)
+                    .frame(width: 44, height: 44)
+                Image(systemName: "waveform")
+                    .font(.system(size: 16))
+                    .foregroundStyle(GlassTheme.accent)
+
+                // AI badge
+                if recording.transcription != nil {
+                    Circle()
+                        .fill(GlassTheme.accent)
+                        .frame(width: 16, height: 16)
+                        .overlay(
+                            Text("AI")
+                                .font(.system(size: 7, weight: .bold))
+                                .foregroundStyle(.white)
+                        )
+                        .offset(x: 16, y: -16)
+                }
+            }
+
+            // Content
             VStack(alignment: .leading, spacing: 4) {
                 Text(recording.title)
-                    .font(.headline)
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                    .foregroundStyle(GlassTheme.textPrimary)
                     .lineLimit(1)
 
-                HStack(spacing: 12) {
-                    Label(recording.formattedDuration, systemImage: "waveform")
+                HStack(spacing: 8) {
+                    Text(recording.date.shortDisplay)
+                    Text("·")
+                    Text(recording.formattedDuration)
                     if recording.source == .watch {
                         Label("Watch", systemImage: "applewatch")
                     }
                 }
                 .font(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(GlassTheme.textTertiary)
             }
 
             Spacer()
 
-            Text(recording.date.shortDisplay)
-                .font(.caption)
-                .foregroundStyle(.tertiary)
-                .fixedSize()
+            // Processing badge or chevron
+            if recording.isTranscribing || recording.isSummarizing {
+                processingBadge
+            } else {
+                Image(systemName: "chevron.right")
+                    .font(.caption)
+                    .foregroundStyle(GlassTheme.textMuted)
+            }
         }
+        .padding(14)
+        .glassCard()
+        .padding(.horizontal)
+    }
+
+    private var processingBadge: some View {
+        HStack(spacing: 4) {
+            PulsingDot()
+            Text("处理中")
+                .font(.caption2)
+                .foregroundStyle(GlassTheme.textTertiary)
+        }
+        .padding(.horizontal, 8)
         .padding(.vertical, 4)
+        .glassCard(radius: 12)
     }
-}
-
-struct iOSRecordingSheet: View {
-    @Environment(\.dismiss) private var dismiss
-    let recorder: iOSAudioRecorder
-    let onSave: (URL, TimeInterval) -> Void
-
-    private let barCount = 40
-    @State private var amplitudeHistory: [CGFloat] = Array(repeating: 0, count: 40)
-    @State private var phaseOffsets: [CGFloat] = (0..<40).map { _ in CGFloat.random(in: 0...0.3) }
-
-    var body: some View {
-        NavigationStack {
-            VStack(spacing: 24) {
-                Spacer()
-
-                Text(formattedTime)
-                    .font(.system(size: 56, weight: .thin, design: .monospaced))
-                    .foregroundStyle(recorder.isRecording ? .red : .primary)
-
-                // Waveform audio level
-                HStack(spacing: 2) {
-                    ForEach(0..<barCount, id: \.self) { index in
-                        let amplitude = amplitudeHistory[index]
-                        let jittered = amplitude + phaseOffsets[index] * amplitude
-                        let baseHeight: CGFloat = 2
-                        let maxHeight: CGFloat = 60
-                        let height = baseHeight + min(jittered, 1.0) * (maxHeight - baseHeight)
-                        Capsule()
-                            .fill(Color.primary)
-                            .frame(width: 3, height: height)
-                    }
-                }
-                .frame(height: 60)
-                .animation(.easeOut(duration: 0.1), value: amplitudeHistory)
-
-                Spacer()
-
-                // Controls
-                HStack(spacing: 32) {
-                    Button {
-                        if recorder.isPaused {
-                            recorder.resumeRecording()
-                        } else {
-                            recorder.pauseRecording()
-                        }
-                    } label: {
-                        Image(systemName: recorder.isPaused ? "play.circle.fill" : "pause.circle.fill")
-                            .font(.system(size: 52))
-                            .foregroundStyle(.yellow)
-                    }
-
-                    Button {
-                        if let result = recorder.stopRecording() {
-                            onSave(result.url, result.duration)
-                            dismiss()
-                        }
-                    } label: {
-                        Image(systemName: "stop.circle.fill")
-                            .font(.system(size: 52))
-                            .foregroundStyle(.red)
-                    }
-                }
-
-                Spacer()
-            }
-            .padding()
-            .navigationTitle("录音")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("取消") {
-                        _ = recorder.stopRecording()
-                        dismiss()
-                    }
-                }
-            }
-            .onAppear {
-                _ = recorder.startRecording()
-            }
-            .onChange(of: normalizedPower) {
-                // Shift history left and append new sample, creating a scrolling waveform
-                amplitudeHistory.removeFirst()
-                amplitudeHistory.append(normalizedPower)
-            }
-        }
-    }
-
-    private var formattedTime: String {
-        let total = Int(recorder.currentTime)
-        let minutes = total / 60
-        let seconds = total % 60
-        return String(format: "%02d:%02d", minutes, seconds)
-    }
-
-    private var normalizedPower: CGFloat {
-        guard recorder.isRecording, !recorder.isPaused else { return 0 }
-        let minDb: Float = -50
-        let clampedPower = max(recorder.averagePower, minDb)
-        let linear = CGFloat((clampedPower - minDb) / (0 - minDb))
-        return pow(linear, 2.0)
-    }
-
 }
