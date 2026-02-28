@@ -85,11 +85,13 @@ struct ActiveRecordingView: View {
 
                     // Stop
                     Button {
-                        if let result = recorder.stopRecording() {
-                            hasSaved = true
-                            onSave(result.url, result.duration)
+                        Task {
+                            if let result = await recorder.stopRecording() {
+                                hasSaved = true
+                                onSave(result.url, result.duration)
+                            }
+                            dismiss()
                         }
-                        dismiss()
                     } label: {
                         Circle()
                             .fill(GlassTheme.accent)
@@ -127,8 +129,10 @@ struct ActiveRecordingView: View {
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
                 Button {
-                    _ = recorder.stopRecording()
-                    dismiss()
+                    Task {
+                        _ = await recorder.stopRecording()
+                        dismiss()
+                    }
                 } label: {
                     HStack(spacing: 4) {
                         Image(systemName: "chevron.left")
@@ -139,8 +143,8 @@ struct ActiveRecordingView: View {
             }
         }
         .toolbarBackground(.hidden, for: .navigationBar)
-        .onAppear {
-            _ = recorder.startRecording()
+        .task {
+            _ = await recorder.startRecording()
         }
         .onChange(of: normalizedPower) {
             amplitudeHistory.removeFirst()

@@ -16,7 +16,8 @@ final class iOSAudioRecorder: NSObject {
         super.init()
     }
 
-    func startRecording() -> URL? {
+    @MainActor
+    func startRecording() async -> URL? {
         let url = Self.newRecordingURL()
         self.recordingURL = url
 
@@ -28,11 +29,21 @@ final class iOSAudioRecorder: NSObject {
             AVEncoderBitRateKey: 128000
         ]
 
-        do {
-            let session = AVAudioSession.sharedInstance()
-            try session.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker])
-            try session.setActive(true)
+        let setupSuccess = await Task.detached(priority: .userInitiated) {
+            do {
+                let session = AVAudioSession.sharedInstance()
+                try session.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker])
+                try session.setActive(true)
+                return true
+            } catch {
+                print("Failed to start recording setup: \(error)")
+                return false
+            }
+        }.value
 
+        guard setupSuccess else { return nil }
+
+        do {
             audioRecorder = try AVAudioRecorder(url: url, settings: settings)
             audioRecorder?.isMeteringEnabled = true
             audioRecorder?.record()
@@ -48,7 +59,8 @@ final class iOSAudioRecorder: NSObject {
         }
     }
 
-    func stopRecording() -> (url: URL, duration: TimeInterval)? {
+    @MainActor
+    func stopRecording() async -> (url: URL, duration: TimeInterval)? {
         guard let recorder = audioRecorder, let url = recordingURL else { return nil }
 
         let duration = recorder.currentTime
@@ -63,11 +75,13 @@ final class iOSAudioRecorder: NSObject {
         audioRecorder = nil
         recordingURL = nil
 
-        do {
-            try AVAudioSession.sharedInstance().setActive(false)
-        } catch {
-            print("Failed to deactivate audio session: \(error)")
-        }
+        await Task.detached(priority: .userInitiated) {
+            do {
+                try AVAudioSession.sharedInstance().setActive(false)
+            } catch {
+                print("Failed to deactivate audio session: \(error)")
+            }
+        }.value
 
         return (url, duration)
     }
