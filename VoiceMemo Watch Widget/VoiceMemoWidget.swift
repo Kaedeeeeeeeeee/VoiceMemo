@@ -59,7 +59,7 @@ struct VoiceMemoWidgetEntryView: View {
                 .foregroundStyle(entry.isRecording ? .red : .primary)
 
             VStack(alignment: .leading) {
-                Text("语音备忘")
+                Text("PodNote")
                     .font(.headline)
                 if entry.isRecording, let duration = entry.recordingDuration {
                     Text(formatDuration(duration))
@@ -86,7 +86,7 @@ struct VoiceMemoWidgetEntryView: View {
             if entry.isRecording {
                 Text("录音中...")
             } else {
-                Text("语音备忘")
+                Text("PodNote")
             }
         }
     }
@@ -108,7 +108,7 @@ struct VoiceMemoWidget: Widget {
                 .containerBackground(.fill.tertiary, for: .widget)
                 .widgetURL(URL(string: "voicememo://record"))
         }
-        .configurationDisplayName("语音备忘")
+        .configurationDisplayName("PodNote")
         .description("快速开始录音")
         .supportedFamilies([
             .accessoryCircular,

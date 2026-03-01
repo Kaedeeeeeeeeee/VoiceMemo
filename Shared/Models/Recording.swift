@@ -15,6 +15,8 @@ final class Recording {
     var isTranscribing: Bool
     var isSummarizing: Bool
     var isSynced: Bool
+    var summaryCache: [String: String] = [:]
+    var speakerNames: [String: String] = [:]
 
     init(
         title: String,
@@ -36,6 +38,31 @@ final class Recording {
         self.isTranscribing = false
         self.isSummarizing = false
         self.isSynced = false
+        self.summaryCache = [:]
+    }
+
+    func applyingSpeakerNames(to text: String) -> String {
+        var result = text
+        for (original, custom) in speakerNames where !custom.isEmpty {
+            result = result.replacingOccurrences(of: "【\(original)】", with: "【\(custom)】")
+        }
+        return result
+    }
+
+    static func extractSpeakers(from text: String) -> [String] {
+        guard let regex = try? NSRegularExpression(pattern: "【(说话人\\d+)】") else { return [] }
+        let matches = regex.matches(in: text, range: NSRange(text.startIndex..., in: text))
+        var seen = Set<String>()
+        var speakers: [String] = []
+        for match in matches {
+            if let range = Range(match.range(at: 1), in: text) {
+                let speaker = String(text[range])
+                if seen.insert(speaker).inserted {
+                    speakers.append(speaker)
+                }
+            }
+        }
+        return speakers
     }
 
     var formattedDuration: String {

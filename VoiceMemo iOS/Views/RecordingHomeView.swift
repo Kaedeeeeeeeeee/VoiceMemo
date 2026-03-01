@@ -75,7 +75,7 @@ struct RecordingHomeView: View {
                                 .font(.title3)
                                 .frame(width: 56, height: 56)
                         }
-                        .glassButton(circular: true)
+                        .glassButton(circular: true, tint: .white)
 
                         // Stop
                         Button {
@@ -118,20 +118,39 @@ struct RecordingHomeView: View {
                     }
                     .padding(.bottom, 40)
 
-                    // Concentric circles mic button
+                    // Mic button
                     ZStack {
-                        // Outer ring
-                        Circle()
-                            .fill(.clear)
-                            .frame(width: 260, height: 260)
-                            .adaptiveGlassEffect(in: Circle())
+                        Canvas { context, size in
+                            let center = CGPoint(x: size.width / 2, y: size.height / 2)
+                            let gridSize: CGFloat = 380
+                            let spacing: CGFloat = 12
+                            let dotRadius: CGFloat = 1.5
+                            let maxDist = gridSize / 2
 
-                        // Middle ring
-                        Color.clear
-                            .frame(width: 200, height: 200)
-                            .adaptiveGlassEffect(in: Circle())
+                            var row = -gridSize / 2
+                            while row <= gridSize / 2 {
+                                var col = -gridSize / 2
+                                while col <= gridSize / 2 {
+                                    let dist = sqrt(row * row + col * col)
+                                    if dist <= maxDist {
+                                        let opacity = 0.5 * (1 - dist / maxDist)
+                                        let point = CGPoint(x: center.x + col, y: center.y + row)
+                                        let path = Path(ellipseIn: CGRect(
+                                            x: point.x - dotRadius,
+                                            y: point.y - dotRadius,
+                                            width: dotRadius * 2,
+                                            height: dotRadius * 2
+                                        ))
+                                        context.fill(path, with: .color(GlassTheme.accent.opacity(opacity)))
+                                    }
+                                    col += spacing
+                                }
+                                row += spacing
+                            }
+                        }
+                        .frame(width: 380, height: 380)
+                        .allowsHitTesting(false)
 
-                        // Inner button
                         Button {
                             Task {
                                 _ = await recorder.startRecording()

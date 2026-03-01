@@ -77,21 +77,6 @@ struct SummaryView: View {
                     .glassCard()
                     .padding()
                 } else if let summary = recording.summary {
-                    // AI badge
-                    HStack(spacing: 6) {
-                        Image(systemName: "sparkles")
-                            .font(.caption2)
-                            .foregroundStyle(GlassTheme.accent)
-                        Text("AI 生成")
-                            .font(.caption2)
-                            .fontWeight(.medium)
-                            .foregroundStyle(GlassTheme.accent)
-                    }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 4)
-                    .glassCard(radius: 10, tint: GlassTheme.accent)
-                    .padding(.horizontal)
-
                     // Template selector
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 8) {
@@ -101,30 +86,73 @@ struct SummaryView: View {
                                     isActive: selectedTemplate == template
                                 ) {
                                     selectedTemplate = template
-                                    regenerateSummary()
+                                    if let cached = recording.summaryCache[template.rawValue] {
+                                        recording.summary = cached
+                                    } else {
+                                        regenerateSummary()
+                                    }
                                 }
                             }
                         }
                         .padding(.horizontal)
                     }
+                    .padding(.top, 8)
 
                     // Summary content
-                    VStack(alignment: .leading) {
-                        if let attributed = try? AttributedString(markdown: summary) {
-                            Text(attributed)
-                                .font(.body)
-                                .foregroundStyle(GlassTheme.textSecondary)
-                                .textSelection(.enabled)
-                        } else {
-                            Text(summary)
-                                .font(.body)
-                                .foregroundStyle(GlassTheme.textSecondary)
-                                .textSelection(.enabled)
+                    let cleanSummary = cleanMarkdownFences(summary)
+                    VStack(alignment: .leading, spacing: 6) {
+                        ForEach(Array(cleanSummary.components(separatedBy: "\n").enumerated()), id: \.offset) { _, line in
+                            if line.trimmingCharacters(in: .whitespaces).isEmpty {
+                                Spacer().frame(height: 4)
+                            } else if line.hasPrefix("## ") {
+                                Text(.init(line.replacingOccurrences(of: "## ", with: "")))
+                                    .font(.title3.bold())
+                                    .foregroundStyle(GlassTheme.textPrimary)
+                            } else if line.hasPrefix("# ") {
+                                Text(.init(line.replacingOccurrences(of: "# ", with: "")))
+                                    .font(.title2.bold())
+                                    .foregroundStyle(GlassTheme.textPrimary)
+                            } else if line.hasPrefix("### ") {
+                                Text(.init(line.replacingOccurrences(of: "### ", with: "")))
+                                    .font(.headline)
+                                    .foregroundStyle(GlassTheme.textPrimary)
+                            } else if line.hasPrefix("  - ") || line.hasPrefix("  * ") {
+                                Text(.init("    • " + String(line.dropFirst(4))))
+                                    .font(.body)
+                                    .foregroundStyle(GlassTheme.textSecondary)
+                            } else if line.hasPrefix("- ") || line.hasPrefix("* ") {
+                                Text(.init("• " + String(line.dropFirst(2))))
+                                    .font(.body)
+                                    .foregroundStyle(GlassTheme.textSecondary)
+                            } else {
+                                Text(.init(line))
+                                    .font(.body)
+                                    .foregroundStyle(GlassTheme.textSecondary)
+                            }
                         }
                     }
+                    .textSelection(.enabled)
                     .padding()
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .glassCard()
+                    .padding(.horizontal)
+
+                    // Regenerate button
+                    Button {
+                        regenerateSummary()
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "arrow.trianglehead.2.counterclockwise")
+                                .font(.caption)
+                            Text("重新生成")
+                                .font(.subheadline)
+                        }
+                        .foregroundStyle(GlassTheme.accent)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 10)
+                    }
+                    .glassButton()
+                    .frame(maxWidth: .infinity)
                     .padding(.horizontal)
                 } else if let error {
                     VStack(spacing: 16) {
@@ -213,6 +241,7 @@ struct SummaryView: View {
                     template: selectedTemplate
                 )
                 recording.summary = summary
+                recording.summaryCache[selectedTemplate.rawValue] = summary
             } catch {
                 self.error = error.localizedDescription
             }
@@ -224,4 +253,18 @@ struct SummaryView: View {
         recording.summary = nil
         generateSummary()
     }
+
+    private func cleanMarkdownFences(_ text: String) -> String {
+        var lines = text.components(separatedBy: "\n")
+        if let first = lines.first?.trimmingCharacters(in: .whitespaces),
+           first.hasPrefix("```") {
+            lines.removeFirst()
+        }
+        if let last = lines.last?.trimmingCharacters(in: .whitespaces),
+           last == "```" {
+            lines.removeLast()
+        }
+        return lines.joined(separator: "\n")
+    }
+
 }

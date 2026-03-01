@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct SettingsView: View {
-    @Environment(LanguageManager.self) var languageManager
+    @EnvironmentObject var languageManager: LanguageManager
 
     var body: some View {
         ZStack {
@@ -16,7 +16,7 @@ struct SettingsView: View {
                         Text("语言")
                             .foregroundStyle(GlassTheme.textPrimary)
                         Spacer()
-                        Picker("语言", selection: Bindable(languageManager).selectedLanguage) {
+                        Picker("语言", selection: $languageManager.selectedLanguage) {
                             ForEach(AppLanguage.allCases) { language in
                                 Text(language.displayName).tag(language)
                             }

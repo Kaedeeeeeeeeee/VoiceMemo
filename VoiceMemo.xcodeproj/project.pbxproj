@@ -87,6 +87,7 @@
 		CCDD00022F51B7000011BE60 /* Exceptions for "Shared" folder in "VoiceMemo Watch App" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
+				Models/ChatModels.swift,
 				Services/APIConfig.template.swift,
 			);
 			target = CED10E592F51B6D00011BE60 /* VoiceMemo Watch App */;

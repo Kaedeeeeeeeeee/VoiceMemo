@@ -4,16 +4,16 @@ import SwiftData
 @main
 struct VoiceMemoiOSApp: App {
     @State private var connectivity = PhoneConnectivityService()
-    @State private var languageManager = LanguageManager()
+    @StateObject private var languageManager = LanguageManager()
 
     var body: some Scene {
         WindowGroup {
             MainTabView()
                 .environment(connectivity)
-                .environment(languageManager)
+                .environmentObject(languageManager)
                 .environment(\.locale, languageManager.locale ?? .current)
                 .preferredColorScheme(.dark)
         }
-        .modelContainer(for: Recording.self)
+        .modelContainer(for: [Recording.self, ChatConversation.self, PersistedChatMessage.self])
     }
 }

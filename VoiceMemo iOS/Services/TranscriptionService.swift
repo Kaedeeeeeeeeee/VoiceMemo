@@ -1,129 +1,157 @@
 import Foundation
-import AVFoundation
 import Observation
+
+enum TranscriptionPhase {
+    case idle, uploading, transcribing, polling
+}
 
 @Observable
 final class TranscriptionService {
-    private let apiKey = APIConfig.openAIKey
-    private let maxFileSize: Int64 = 25 * 1024 * 1024 // 25MB
-    private let chunkDuration: TimeInterval = 10 * 60 // 10 minutes
+    private let apiKey = APIConfig.assemblyAIKey
+    private let baseURL = "https://api.assemblyai.com/v2"
+    var currentPhase: TranscriptionPhase = .idle
 
     func transcribe(audioURL: URL) async throws -> String {
-        guard !apiKey.isEmpty else {
+        guard !apiKey.isEmpty, apiKey != "YOUR_ASSEMBLYAI_API_KEY" else {
             throw TranscriptionError.missingAPIKey
         }
 
-        let fileSize = try FileManager.default.attributesOfItem(atPath: audioURL.path)[.size] as? Int64 ?? 0
+        currentPhase = .uploading
+        let uploadURL = try await uploadAudio(fileURL: audioURL)
 
-        if fileSize <= maxFileSize {
-            return try await transcribeSingleFile(audioURL: audioURL)
-        } else {
-            return try await transcribeInChunks(audioURL: audioURL)
-        }
+        currentPhase = .transcribing
+        let transcriptID = try await requestTranscription(uploadURL: uploadURL)
+
+        currentPhase = .polling
+        let utterances = try await pollForResult(id: transcriptID)
+
+        currentPhase = .idle
+        return formatUtterances(utterances)
     }
 
-    private func transcribeInChunks(audioURL: URL) async throws -> String {
-        let asset = AVURLAsset(url: audioURL)
-        let duration = try await asset.load(.duration)
-        let totalSeconds = CMTimeGetSeconds(duration)
+    // MARK: - Upload audio file
 
-        var results: [String] = []
-        var startTime: TimeInterval = 0
-        let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
-
-        defer {
-            try? FileManager.default.removeItem(at: tempDir)
-        }
-
-        var chunkIndex = 0
-        while startTime < totalSeconds {
-            let endTime = min(startTime + chunkDuration, totalSeconds)
-            let chunkURL = tempDir.appendingPathComponent("chunk_\(chunkIndex).m4a")
-
-            try await exportChunk(from: audioURL, to: chunkURL, startTime: startTime, endTime: endTime)
-
-            let text = try await transcribeSingleFile(audioURL: chunkURL)
-            if !text.isEmpty {
-                results.append(text)
-            }
-
-            startTime = endTime
-            chunkIndex += 1
-        }
-
-        return results.joined(separator: "")
-    }
-
-    private func exportChunk(from sourceURL: URL, to outputURL: URL, startTime: TimeInterval, endTime: TimeInterval) async throws {
-        let asset = AVURLAsset(url: sourceURL)
-
-        let startCMTime = CMTime(seconds: startTime, preferredTimescale: 600)
-        let endCMTime = CMTime(seconds: endTime, preferredTimescale: 600)
-        let timeRange = CMTimeRange(start: startCMTime, end: endCMTime)
-
-        let composition = AVMutableComposition()
-        guard let track = try await asset.loadTracks(withMediaType: .audio).first,
-              let compositionTrack = composition.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid) else {
-            throw TranscriptionError.exportFailed
-        }
-        try compositionTrack.insertTimeRange(timeRange, of: track, at: .zero)
-
-        guard let session = AVAssetExportSession(asset: composition, presetName: AVAssetExportPresetAppleM4A) else {
-            throw TranscriptionError.exportFailed
-        }
-        try await session.export(to: outputURL, as: .m4a)
-    }
-
-    private func transcribeSingleFile(audioURL: URL) async throws -> String {
-        let url = URL(string: "https://api.openai.com/v1/audio/transcriptions")!
+    private func uploadAudio(fileURL: URL) async throws -> String {
+        let url = URL(string: "\(baseURL)/upload")!
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
-        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        request.setValue(apiKey, forHTTPHeaderField: "authorization")
+        request.setValue("application/octet-stream", forHTTPHeaderField: "Content-Type")
 
-        let boundary = UUID().uuidString
-        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
-
-        let audioData = try Data(contentsOf: audioURL)
-        var body = Data()
-
-        // model field
-        body.appendMultipartField(name: "model", value: "whisper-1", boundary: boundary)
-
-        // language field (optional, helps with accuracy)
-        body.appendMultipartField(name: "language", value: "zh", boundary: boundary)
-
-        // response_format
-        body.appendMultipartField(name: "response_format", value: "text", boundary: boundary)
-
-        // audio file
-        body.append("--\(boundary)\r\n".data(using: .utf8)!)
-        body.append("Content-Disposition: form-data; name=\"file\"; filename=\"\(audioURL.lastPathComponent)\"\r\n".data(using: .utf8)!)
-        body.append("Content-Type: audio/m4a\r\n\r\n".data(using: .utf8)!)
-        body.append(audioData)
-        body.append("\r\n".data(using: .utf8)!)
-
-        // closing boundary
-        body.append("--\(boundary)--\r\n".data(using: .utf8)!)
-
-        request.httpBody = body
+        let audioData = try Data(contentsOf: fileURL)
+        request.httpBody = audioData
 
         let (data, response) = try await URLSession.shared.data(for: request)
 
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw TranscriptionError.invalidResponse
-        }
-
-        guard httpResponse.statusCode == 200 else {
+        guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
             let errorBody = String(data: data, encoding: .utf8) ?? "Unknown error"
-            throw TranscriptionError.apiError(statusCode: httpResponse.statusCode, message: errorBody)
+            let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
+            throw TranscriptionError.apiError(statusCode: statusCode, message: errorBody)
         }
 
-        guard let text = String(data: data, encoding: .utf8) else {
+        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let uploadURL = json["upload_url"] as? String else {
             throw TranscriptionError.invalidResponse
         }
 
-        return text.trimmingCharacters(in: .whitespacesAndNewlines)
+        return uploadURL
+    }
+
+    // MARK: - Request transcription with speaker diarization
+
+    private func requestTranscription(uploadURL: String) async throws -> String {
+        let url = URL(string: "\(baseURL)/transcript")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue(apiKey, forHTTPHeaderField: "authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        let body: [String: Any] = [
+            "audio_url": uploadURL,
+            "speaker_labels": true,
+            "language_code": "zh",
+            "speech_models": ["universal-2"]
+        ]
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+            let errorBody = String(data: data, encoding: .utf8) ?? "Unknown error"
+            let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
+            throw TranscriptionError.apiError(statusCode: statusCode, message: errorBody)
+        }
+
+        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let id = json["id"] as? String else {
+            throw TranscriptionError.invalidResponse
+        }
+
+        return id
+    }
+
+    // MARK: - Poll for result
+
+    private func pollForResult(id: String) async throws -> [[String: Any]] {
+        let url = URL(string: "\(baseURL)/transcript/\(id)")!
+
+        while true {
+            var request = URLRequest(url: url)
+            request.setValue(apiKey, forHTTPHeaderField: "authorization")
+
+            let (data, response) = try await URLSession.shared.data(for: request)
+
+            guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+                let errorBody = String(data: data, encoding: .utf8) ?? "Unknown error"
+                let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
+                throw TranscriptionError.apiError(statusCode: statusCode, message: errorBody)
+            }
+
+            guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let status = json["status"] as? String else {
+                throw TranscriptionError.invalidResponse
+            }
+
+            if status == "completed" {
+                if let utterances = json["utterances"] as? [[String: Any]] {
+                    return utterances
+                }
+                // No utterances — fall back to full text
+                if let text = json["text"] as? String, !text.isEmpty {
+                    return [["speaker": "A", "text": text]]
+                }
+                return []
+            } else if status == "error" {
+                let errorMessage = json["error"] as? String ?? "转写失败"
+                throw TranscriptionError.transcriptionFailed(message: errorMessage)
+            }
+
+            try await Task.sleep(nanoseconds: 3_000_000_000) // 3 seconds
+        }
+    }
+
+    // MARK: - Format utterances
+
+    private func formatUtterances(_ utterances: [[String: Any]]) -> String {
+        if utterances.isEmpty { return "" }
+
+        // Map speaker IDs (A, B, C...) to display labels
+        var speakerMap: [String: String] = [:]
+        var nextLabel = 0
+
+        return utterances.compactMap { utterance -> String? in
+            guard let speaker = utterance["speaker"] as? String,
+                  let text = utterance["text"] as? String else { return nil }
+
+            if speakerMap[speaker] == nil {
+                let label = String(UnicodeScalar("A".unicodeScalars.first!.value + UInt32(nextLabel))!)
+                speakerMap[speaker] = label
+                nextLabel += 1
+            }
+
+            let displayLabel = speakerMap[speaker]!
+            return "【说话人\(displayLabel)】\(text)"
+        }.joined(separator: "\n\n")
     }
 }
 
@@ -131,26 +159,18 @@ enum TranscriptionError: LocalizedError {
     case missingAPIKey
     case invalidResponse
     case apiError(statusCode: Int, message: String)
-    case exportFailed
+    case transcriptionFailed(message: String)
 
     var errorDescription: String? {
         switch self {
         case .missingAPIKey:
-            return "未设置 OpenAI API Key。请在设置中配置。"
+            return "未设置 AssemblyAI API Key。请在 APIConfig 中配置。"
         case .invalidResponse:
             return "服务器返回了无效的响应"
         case .apiError(let statusCode, let message):
             return "API 错误 (\(statusCode)): \(message)"
-        case .exportFailed:
-            return "音频分片导出失败"
+        case .transcriptionFailed(let message):
+            return "转写失败: \(message)"
         }
-    }
-}
-
-extension Data {
-    mutating func appendMultipartField(name: String, value: String, boundary: String) {
-        append("--\(boundary)\r\n".data(using: .utf8)!)
-        append("Content-Disposition: form-data; name=\"\(name)\"\r\n\r\n".data(using: .utf8)!)
-        append("\(value)\r\n".data(using: .utf8)!)
     }
 }

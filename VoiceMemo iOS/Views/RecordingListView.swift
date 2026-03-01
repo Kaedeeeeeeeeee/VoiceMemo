@@ -218,6 +218,7 @@ struct RecordingHistoryView: View {
                                 selectedRecording = recording
                             } label: {
                                 HistoryRecordingRow(recording: recording)
+                                    .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
                             .listRowBackground(Color.clear)

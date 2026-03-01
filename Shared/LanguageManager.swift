@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import Combine
 
 enum AppLanguage: String, CaseIterable, Identifiable {
     case system = "system"
@@ -19,11 +20,8 @@ enum AppLanguage: String, CaseIterable, Identifiable {
         }
     }
 }
-import Observation
-
-@Observable
-class LanguageManager {
-    var selectedLanguage: AppLanguage {
+class LanguageManager: ObservableObject {
+    @Published var selectedLanguage: AppLanguage {
         didSet {
             UserDefaults.standard.set(selectedLanguage.rawValue, forKey: "app_language")
         }

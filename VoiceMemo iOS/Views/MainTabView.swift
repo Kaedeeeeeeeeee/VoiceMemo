@@ -23,5 +23,6 @@ struct MainTabView: View {
                 }
             }
         }
+        .tint(GlassTheme.accent)
     }
 }

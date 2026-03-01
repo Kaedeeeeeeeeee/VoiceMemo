@@ -22,7 +22,7 @@ struct ContentView: View {
                 }
             }
         }
-        .navigationTitle("语音备忘")
+        .navigationTitle("PodNote")
         .toolbar {
             ToolbarItem(placement: .bottomBar) {
                 Button {

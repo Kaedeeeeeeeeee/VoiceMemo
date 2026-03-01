@@ -7,24 +7,24 @@ final class AudioPlayerManager: NSObject, AVAudioPlayerDelegate {
     var currentTime: TimeInterval = 0
     var duration: TimeInterval = 0
     var playbackRate: Float = 1.0
+    var isSeeking = false
 
     private var player: AVAudioPlayer?
     private var timer: Timer?
 
-    func load(url: URL) {
-        do {
+    func load(url: URL) async {
+        let loadedPlayer = await Task.detached { () -> AVAudioPlayer? in
             let session = AVAudioSession.sharedInstance()
-            try session.setCategory(.playback, mode: .default)
-            try session.setActive(true)
-
-            player = try AVAudioPlayer(contentsOf: url)
-            player?.delegate = self
-            player?.enableRate = true
-            player?.prepareToPlay()
-            duration = player?.duration ?? 0
-        } catch {
-            print("Failed to load audio: \(error)")
-        }
+            try? session.setCategory(.playback, mode: .default)
+            try? session.setActive(true)
+            let p = try? AVAudioPlayer(contentsOf: url)
+            p?.enableRate = true
+            p?.prepareToPlay()
+            return p
+        }.value
+        self.player = loadedPlayer
+        self.player?.delegate = self
+        self.duration = loadedPlayer?.duration ?? 0
     }
 
     func play() {
@@ -47,6 +47,7 @@ final class AudioPlayerManager: NSObject, AVAudioPlayerDelegate {
     func seek(to time: TimeInterval) {
         player?.currentTime = time
         currentTime = time
+        isSeeking = false
     }
 
     func setRate(_ rate: Float) {
@@ -58,7 +59,7 @@ final class AudioPlayerManager: NSObject, AVAudioPlayerDelegate {
 
     private func startTimer() {
         timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
-            guard let self else { return }
+            guard let self, !self.isSeeking else { return }
             self.currentTime = self.player?.currentTime ?? 0
         }
     }
@@ -85,15 +86,15 @@ struct MiniPlayerBar: View {
     @State private var player = AudioPlayerManager()
     var body: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 12) {
+            HStack(spacing: 8) {
                 // Play/pause
                 Button {
                     player.toggle()
                 } label: {
                     Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
-                        .font(.system(size: 16))
+                        .font(.system(size: 14))
                         .foregroundStyle(GlassTheme.textPrimary)
-                        .frame(width: 36, height: 36)
+                        .frame(width: 28, height: 28)
                 }
                 .glassButton(circular: true)
 
@@ -101,38 +102,41 @@ struct MiniPlayerBar: View {
                 Slider(
                     value: Binding(
                         get: { player.currentTime },
-                        set: { player.seek(to: $0) }
+                        set: { newValue in
+                            player.isSeeking = true
+                            player.currentTime = newValue
+                        }
                     ),
-                    in: 0...max(player.duration, 0.01)
+                    in: 0...max(player.duration, 0.01),
+                    onEditingChanged: { editing in
+                        if !editing {
+                            player.seek(to: player.currentTime)
+                        } else {
+                            player.isSeeking = true
+                        }
+                    }
                 )
                 .tint(GlassTheme.accent)
 
                 // Time
-                Text(formatTime(player.currentTime))
-                    .font(.caption)
+                Text("\(formatTime(player.currentTime))/\(formatTime(player.duration))")
+                    .font(.caption2)
                     .monospacedDigit()
                     .foregroundStyle(GlassTheme.textSecondary)
-                Text("/")
-                    .font(.caption2)
-                    .foregroundStyle(GlassTheme.textMuted)
-                Text(formatTime(player.duration))
-                    .font(.caption)
-                    .monospacedDigit()
-                    .foregroundStyle(GlassTheme.textTertiary)
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
-            .glassCard(radius: 28)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .glassCard(radius: 20)
             .padding(.horizontal)
-            .padding(.bottom, 4)
+            .padding(.bottom, 2)
         }
         .onTapGesture {
             showFullPlayer = true
         }
-        .onAppear {
+        .task {
             let documentsDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
             let url = documentsDir.appendingPathComponent(recording.fileURL)
-            player.load(url: url)
+            await player.load(url: url)
         }
     }
 
@@ -169,9 +173,19 @@ struct FullPlayerSheet: View {
                 Slider(
                     value: Binding(
                         get: { player.currentTime },
-                        set: { player.seek(to: $0) }
+                        set: { newValue in
+                            player.isSeeking = true
+                            player.currentTime = newValue
+                        }
                     ),
-                    in: 0...max(player.duration, 0.01)
+                    in: 0...max(player.duration, 0.01),
+                    onEditingChanged: { editing in
+                        if !editing {
+                            player.seek(to: player.currentTime)
+                        } else {
+                            player.isSeeking = true
+                        }
+                    }
                 )
                 .tint(GlassTheme.accent)
 
@@ -245,10 +259,10 @@ struct FullPlayerSheet: View {
 
             Spacer()
         }
-        .onAppear {
+        .task {
             let documentsDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
             let url = documentsDir.appendingPathComponent(recording.fileURL)
-            player.load(url: url)
+            await player.load(url: url)
         }
     }
 
