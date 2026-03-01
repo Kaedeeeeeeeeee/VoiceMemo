@@ -2,7 +2,7 @@ import SwiftUI
 
 enum GlassTheme {
     // MARK: - Colors
-    static let background = Color.black
+    static let background = Color(white: 0.06)
     static let surfaceLight = Color.white.opacity(0.08)
     static let surfaceMedium = Color.white.opacity(0.12)
     static let surfaceHeavy = Color.white.opacity(0.18)

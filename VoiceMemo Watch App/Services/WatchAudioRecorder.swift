@@ -19,6 +19,10 @@ final class WatchAudioRecorder: NSObject {
     }
 
     func startRecording() -> URL? {
+        // Optimistically update UI state for immediate feedback
+        isRecording = true
+        isPaused = false
+
         let url = Self.newRecordingURL()
         self.recordingURL = url
 
@@ -38,9 +42,6 @@ final class WatchAudioRecorder: NSObject {
             audioRecorder?.isMeteringEnabled = true
             audioRecorder?.record()
 
-            isRecording = true
-            isPaused = false
-
             startExtendedSession()
             startTimer()
             WKInterfaceDevice.current().play(.start)
@@ -48,6 +49,7 @@ final class WatchAudioRecorder: NSObject {
             return url
         } catch {
             print("Failed to start recording: \(error)")
+            isRecording = false
             return nil
         }
     }

@@ -1,6 +1,8 @@
 import SwiftUI
 
 struct SettingsView: View {
+    @Environment(LanguageManager.self) var languageManager
+
     var body: some View {
         ZStack {
             RadialBackgroundView()
@@ -8,13 +10,31 @@ struct SettingsView: View {
             VStack(spacing: 24) {
                 Spacer()
 
+                // Settings card
+                VStack(spacing: 16) {
+                    HStack {
+                        Text("语言")
+                            .foregroundStyle(GlassTheme.textPrimary)
+                        Spacer()
+                        Picker("语言", selection: Bindable(languageManager).selectedLanguage) {
+                            ForEach(AppLanguage.allCases) { language in
+                                Text(language.displayName).tag(language)
+                            }
+                        }
+                        .tint(GlassTheme.accent)
+                    }
+                }
+                .padding(24)
+                .glassCard()
+                .padding(.horizontal)
+
                 // App info card
                 VStack(spacing: 16) {
                     Image(systemName: "mic.fill")
                         .font(.system(size: 40))
                         .foregroundStyle(GlassTheme.accent)
 
-                    Text("VoiceMemo")
+                    Text("PodNote")
                         .font(.title2)
                         .fontWeight(.bold)
                         .foregroundStyle(GlassTheme.textPrimary)

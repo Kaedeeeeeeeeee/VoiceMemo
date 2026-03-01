@@ -61,7 +61,7 @@ struct RecordingDetailView: View {
             FullPlayerSheet(recording: recording)
                 .presentationDetents([.medium])
                 .presentationDragIndicator(.visible)
-                .presentationBackground(GlassTheme.surfaceMedium)
+                .presentationBackground(.regularMaterial)
         }
     }
 
@@ -73,7 +73,7 @@ struct RecordingDetailView: View {
                         selectedTab = index
                     }
                 } label: {
-                    Text(title)
+                    Text(LocalizedStringKey(title))
                         .font(.subheadline)
                         .fontWeight(selectedTab == index ? .semibold : .regular)
                         .foregroundStyle(selectedTab == index ? GlassTheme.textPrimary : GlassTheme.textMuted)

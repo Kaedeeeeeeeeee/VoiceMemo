@@ -83,12 +83,8 @@ struct MiniPlayerBar: View {
     let recording: Recording
     @Binding var showFullPlayer: Bool
     @State private var player = AudioPlayerManager()
-    @State private var miniBarLevels: [CGFloat] = (0..<5).map { _ in CGFloat.random(in: 0.3...0.7) }
-
     var body: some View {
-        Button {
-            showFullPlayer = true
-        } label: {
+        VStack(spacing: 0) {
             HStack(spacing: 12) {
                 // Play/pause
                 Button {
@@ -98,26 +94,18 @@ struct MiniPlayerBar: View {
                         .font(.system(size: 16))
                         .foregroundStyle(GlassTheme.textPrimary)
                         .frame(width: 36, height: 36)
-                        .background(GlassTheme.surfaceMedium, in: Circle())
                 }
-                .buttonStyle(.plain)
+                .glassButton(circular: true)
 
-                // Mini waveform bars
-                HStack(spacing: 2) {
-                    ForEach(0..<5, id: \.self) { i in
-                        Capsule()
-                            .fill(GlassTheme.accent)
-                            .frame(width: 2, height: player.isPlaying ? miniBarLevels[i] * 16 : 4)
-                            .animation(
-                                .easeInOut(duration: 0.3)
-                                    .repeatForever(autoreverses: true)
-                                    .delay(Double(i) * 0.1),
-                                value: player.isPlaying
-                            )
-                    }
-                }
-
-                Spacer()
+                // Progress slider
+                Slider(
+                    value: Binding(
+                        get: { player.currentTime },
+                        set: { player.seek(to: $0) }
+                    ),
+                    in: 0...max(player.duration, 0.01)
+                )
+                .tint(GlassTheme.accent)
 
                 // Time
                 Text(formatTime(player.currentTime))
@@ -134,11 +122,13 @@ struct MiniPlayerBar: View {
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
-            .glassCard(radius: 28, fill: GlassTheme.surfaceMedium)
+            .glassCard(radius: 28)
             .padding(.horizontal)
             .padding(.bottom, 4)
         }
-        .buttonStyle(.plain)
+        .onTapGesture {
+            showFullPlayer = true
+        }
         .onAppear {
             let documentsDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
             let url = documentsDir.appendingPathComponent(recording.fileURL)

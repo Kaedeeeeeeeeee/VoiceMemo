@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+    <defs>
+        <radialGradient id="bgGrad" cx="50%" cy="40%" r="60%">
+            <stop offset="0%" stop-color="#1a1a1e" />
+            <stop offset="100%" stop-color="#09090b" />
+        </radialGradient>
+
+        <!-- White glow behind mic -->
+        <radialGradient id="accentGlow" cx="50%" cy="46%" r="30%">
+            <stop offset="0%" stop-color="#ffffff" stop-opacity="0.18" />
+            <stop offset="60%" stop-color="#ffffff" stop-opacity="0.05" />
+            <stop offset="100%" stop-color="#ffffff" stop-opacity="0" />
+        </radialGradient>
+
+        <!-- Glass circle gradient -->
+        <linearGradient id="glassGrad" x1="50%" y1="0%" x2="50%" y2="100%">
+            <stop offset="0%" stop-color="#ffffff" stop-opacity="0.12" />
+            <stop offset="100%" stop-color="#ffffff" stop-opacity="0.04" />
+        </linearGradient>
+
+        <linearGradient id="glassBorder" x1="50%" y1="0%" x2="50%" y2="100%">
+            <stop offset="0%" stop-color="#ffffff" stop-opacity="0.25" />
+            <stop offset="50%" stop-color="#ffffff" stop-opacity="0.08" />
+            <stop offset="100%" stop-color="#ffffff" stop-opacity="0.15" />
+        </linearGradient>
+
+        <!-- Mic body gradient -->
+        <linearGradient id="micGrad" x1="50%" y1="0%" x2="50%" y2="100%">
+            <stop offset="0%" stop-color="#ffffff" />
+            <stop offset="100%" stop-color="#d4d4d8" />
+        </linearGradient>
+
+        <filter id="softShadow" x="-20%" y="-20%" width="140%" height="140%">
+            <feDropShadow dx="0" dy="8" stdDeviation="20" flood-color="#000000" flood-opacity="0.5"/>
+        </filter>
+    </defs>
+
+    <!-- Background -->
+    <rect width="1024" height="1024" fill="url(#bgGrad)" />
+
+    <!-- White glow -->
+    <rect width="1024" height="1024" fill="url(#accentGlow)" />
+
+    <!-- Outer subtle ring -->
+    <circle cx="512" cy="480" r="320" fill="none" stroke="#ffffff" stroke-opacity="0.06" stroke-width="1.5" />
+
+    <!-- Glass circle -->
+    <circle cx="512" cy="480" r="220" fill="url(#glassGrad)" stroke="url(#glassBorder)" stroke-width="1.5" filter="url(#softShadow)" />
+
+    <!-- Microphone icon (larger) -->
+    <g>
+        <!-- Mic capsule -->
+        <rect x="442" y="290" width="140" height="270" rx="70" fill="url(#micGrad)" />
+
+        <!-- Arc cradle -->
+        <path d="M 362 480 A 150 150 0 0 0 662 480" fill="none" stroke="url(#micGrad)" stroke-width="20" stroke-linecap="round"/>
+
+        <!-- Stem -->
+        <line x1="512" y1="630" x2="512" y2="700" stroke="url(#micGrad)" stroke-width="20" stroke-linecap="round"/>
+    </g>
+</svg>

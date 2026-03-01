@@ -47,11 +47,7 @@ struct AIConversationView: View {
                     .padding(.horizontal, 16)
                     .padding(.vertical, 10)
                     .foregroundStyle(GlassTheme.textPrimary)
-                    .background(GlassTheme.surfaceLight, in: Capsule())
-                    .overlay(
-                        Capsule()
-                            .stroke(GlassTheme.borderSubtle, lineWidth: 0.5)
-                    )
+                    .adaptiveGlassEffect(in: Capsule())
                     .disabled(recording.transcription == nil)
 
                 Button {
@@ -106,7 +102,7 @@ struct AIConversationView: View {
                                 .padding(.horizontal, 16)
                                 .padding(.vertical, 12)
                         }
-                        .buttonStyle(GlassButtonStyle(fill: GlassTheme.surfaceLight))
+                        .glassButton()
                     }
                 }
             }
@@ -186,20 +182,9 @@ struct GlassMessageBubble: View {
                 .font(.body)
                 .padding(12)
                 .foregroundStyle(GlassTheme.textPrimary)
-                .background(
-                    message.role == .user
-                        ? GlassTheme.accent.opacity(0.3)
-                        : GlassTheme.surfaceLight,
+                .adaptiveGlassEffect(
+                    tint: message.role == .user ? GlassTheme.accent : nil,
                     in: RoundedRectangle(cornerRadius: 16)
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 16)
-                        .stroke(
-                            message.role == .user
-                                ? GlassTheme.accent.opacity(0.2)
-                                : GlassTheme.borderSubtle,
-                            lineWidth: 0.5
-                        )
                 )
 
             if message.role == .assistant { Spacer(minLength: 60) }

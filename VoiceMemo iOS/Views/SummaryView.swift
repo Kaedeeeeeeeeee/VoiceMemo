@@ -89,7 +89,7 @@ struct SummaryView: View {
                     }
                     .padding(.horizontal, 10)
                     .padding(.vertical, 4)
-                    .glassCard(radius: 10, fill: GlassTheme.accent.opacity(0.15))
+                    .glassCard(radius: 10, tint: GlassTheme.accent)
                     .padding(.horizontal)
 
                     // Template selector
@@ -142,7 +142,7 @@ struct SummaryView: View {
                             self.error = nil
                             generateSummary()
                         }
-                        .buttonStyle(GlassButtonStyle(fill: GlassTheme.accent.opacity(0.3)))
+                        .glassButton()
                         .foregroundStyle(GlassTheme.accent)
                     }
                     .frame(maxWidth: .infinity)
@@ -192,7 +192,7 @@ struct SummaryView: View {
                             }
                             .padding()
                         }
-                        .buttonStyle(GlassButtonStyle(fill: GlassTheme.surfaceLight))
+                        .glassButton()
                     }
                 }
             }

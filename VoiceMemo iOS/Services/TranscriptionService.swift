@@ -58,22 +58,21 @@ final class TranscriptionService {
     private func exportChunk(from sourceURL: URL, to outputURL: URL, startTime: TimeInterval, endTime: TimeInterval) async throws {
         let asset = AVURLAsset(url: sourceURL)
 
-        guard let exportSession = AVAssetExportSession(asset: asset, presetName: AVAssetExportPresetAppleM4A) else {
-            throw TranscriptionError.exportFailed
-        }
-
-        exportSession.outputURL = outputURL
-        exportSession.outputFileType = .m4a
-
         let startCMTime = CMTime(seconds: startTime, preferredTimescale: 600)
         let endCMTime = CMTime(seconds: endTime, preferredTimescale: 600)
-        exportSession.timeRange = CMTimeRange(start: startCMTime, end: endCMTime)
+        let timeRange = CMTimeRange(start: startCMTime, end: endCMTime)
 
-        await exportSession.export()
-
-        guard exportSession.status == .completed else {
+        let composition = AVMutableComposition()
+        guard let track = try await asset.loadTracks(withMediaType: .audio).first,
+              let compositionTrack = composition.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid) else {
             throw TranscriptionError.exportFailed
         }
+        try compositionTrack.insertTimeRange(timeRange, of: track, at: .zero)
+
+        guard let session = AVAssetExportSession(asset: composition, presetName: AVAssetExportPresetAppleM4A) else {
+            throw TranscriptionError.exportFailed
+        }
+        try await session.export(to: outputURL, as: .m4a)
     }
 
     private func transcribeSingleFile(audioURL: URL) async throws -> String {

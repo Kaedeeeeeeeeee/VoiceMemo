@@ -11,11 +11,15 @@ struct ContentView: View {
     @State private var navigateToRecording = false
 
     var body: some View {
-        Group {
-            if recordings.isEmpty {
-                emptyState
-            } else {
-                recordingsList
+        ZStack {
+            WatchGlassTheme.background.ignoresSafeArea()
+
+            Group {
+                if recordings.isEmpty {
+                    emptyState
+                } else {
+                    recordingsList
+                }
             }
         }
         .navigationTitle("语音备忘")
@@ -24,16 +28,12 @@ struct ContentView: View {
                 Button {
                     navigateToRecording = true
                 } label: {
-                    ZStack {
-                        Circle()
-                            .fill(.red)
-                            .frame(width: 50, height: 50)
-                        Image(systemName: "mic.fill")
-                            .font(.title3)
-                            .foregroundStyle(.white)
-                    }
+                    Image(systemName: "mic.fill")
+                        .font(.title3)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.glass)
+                .buttonBorderShape(.circle)
+                .tint(WatchGlassTheme.accent)
             }
         }
         .navigationDestination(isPresented: $navigateToRecording) {
@@ -51,34 +51,38 @@ struct ContentView: View {
         VStack(spacing: 12) {
             Image(systemName: "mic.slash")
                 .font(.largeTitle)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(WatchGlassTheme.textSecondary)
             Text("暂无录音")
                 .font(.headline)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(WatchGlassTheme.textSecondary)
             Text("点击下方按钮开始录音")
                 .font(.caption)
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(WatchGlassTheme.textMuted)
         }
     }
 
     private var recordingsList: some View {
-        List {
-            ForEach(recordings) { recording in
-                Button {
-                    togglePlayback(recording)
-                } label: {
-                    HStack {
-                        RecordingRowView(recording: recording)
+        ScrollView {
+            VStack(spacing: 8) {
+                ForEach(recordings) { recording in
+                    Button {
+                        togglePlayback(recording)
+                    } label: {
+                        HStack {
+                            RecordingRowView(recording: recording)
 
-                        if playingRecordingID == recording.id {
-                            Image(systemName: "speaker.wave.2.fill")
-                                .foregroundStyle(.blue)
-                                .font(.caption)
+                            if playingRecordingID == recording.id {
+                                Image(systemName: "speaker.wave.2.fill")
+                                    .foregroundStyle(WatchGlassTheme.accent)
+                                    .font(.caption)
+                            }
                         }
                     }
+                    .buttonStyle(.plain)
+                    .watchGlassCard()
                 }
             }
-            .onDelete(perform: deleteRecordings)
+            .padding(.horizontal, 4)
         }
     }
 
@@ -99,18 +103,6 @@ struct ContentView: View {
             playingRecordingID = recording.id
         } catch {
             print("Playback failed: \(error)")
-        }
-    }
-
-    private func deleteRecordings(at offsets: IndexSet) {
-        for index in offsets {
-            let recording = recordings[index]
-
-            let documentsDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-            let fileURL = documentsDir.appendingPathComponent(recording.fileURL)
-            try? FileManager.default.removeItem(at: fileURL)
-
-            modelContext.delete(recording)
         }
     }
 }

@@ -3,6 +3,8 @@ import Observation
 
 @Observable
 final class WatchConnectivityService: NSObject, WCSessionDelegate {
+    static let shared = WatchConnectivityService()
+
     var isReachable = false
     var transferProgress: Double = 0
     private var wcSession: WCSession?

@@ -30,6 +30,7 @@ struct RecordingHistoryView: View {
     @State private var recordingToRename: Recording?
     @State private var renameText = ""
     @State private var recordingToDelete: Recording?
+    @State private var selectedRecording: Recording?
     var switchToTab: (AppTab) -> Void
 
     private var filteredRecordings: [Recording] {
@@ -80,34 +81,14 @@ struct RecordingHistoryView: View {
     }
 
     var body: some View {
-        ZStack(alignment: .bottomTrailing) {
-            ZStack {
-                RadialBackgroundView()
+        ZStack {
+            RadialBackgroundView()
 
-                if filteredRecordings.isEmpty {
-                    emptyState
-                } else {
-                    recordingsList
-                }
+            if filteredRecordings.isEmpty {
+                emptyState
+            } else {
+                recordingsList
             }
-
-            // FAB
-            Button {
-                switchToTab(.home)
-            } label: {
-                Circle()
-                    .fill(.white)
-                    .frame(width: 56, height: 56)
-                    .overlay(
-                        Image(systemName: "mic.fill")
-                            .font(.title3)
-                            .foregroundStyle(.black)
-                    )
-                    .shadow(color: .white.opacity(0.15), radius: 12, y: 4)
-            }
-            .buttonStyle(.plain)
-            .padding(.trailing, 20)
-            .padding(.bottom, 20)
         }
         .navigationTitle("历史记录")
         .navigationBarTitleDisplayMode(.large)
@@ -167,7 +148,7 @@ struct RecordingHistoryView: View {
                 .fontWeight(.semibold)
                 .foregroundStyle(GlassTheme.textSecondary)
 
-            Text("点击右下角按钮开始录音")
+            Text("前往首页开始录音")
                 .font(.subheadline)
                 .foregroundStyle(GlassTheme.textMuted)
         }
@@ -176,66 +157,72 @@ struct RecordingHistoryView: View {
     // MARK: - List
 
     private var recordingsList: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                // Search bar
-                if isSearching {
-                    HStack(spacing: 10) {
-                        HStack(spacing: 8) {
-                            Image(systemName: "magnifyingglass")
-                                .font(.subheadline)
-                                .foregroundStyle(GlassTheme.textMuted)
-                            TextField("搜索录音", text: $searchText)
-                                .font(.subheadline)
-                                .foregroundStyle(GlassTheme.textPrimary)
-                                .tint(GlassTheme.accent)
-                        }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 10)
-                        .glassCard(radius: 12)
-
-                        Button {
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                searchText = ""
-                                isSearching = false
-                            }
-                        } label: {
-                            Text("取消")
-                                .font(.subheadline)
-                                .foregroundStyle(GlassTheme.textSecondary)
-                        }
-                    }
-                    .padding(.horizontal)
-                    .transition(.move(edge: .top).combined(with: .opacity))
-                }
-
-                // Filter chips
-                ScrollView(.horizontal, showsIndicators: false) {
+        VStack(spacing: 0) {
+            // Search bar
+            if isSearching {
+                HStack(spacing: 10) {
                     HStack(spacing: 8) {
-                        ForEach(RecordingFilter.allCases, id: \.rawValue) { filter in
-                            GlassChip(
-                                title: filter.rawValue,
-                                isActive: activeFilter == filter
-                            ) {
-                                withAnimation(.easeInOut(duration: 0.2)) {
-                                    activeFilter = filter
-                                }
+                        Image(systemName: "magnifyingglass")
+                            .font(.subheadline)
+                            .foregroundStyle(GlassTheme.textMuted)
+                        TextField("搜索录音", text: $searchText)
+                            .font(.subheadline)
+                            .foregroundStyle(GlassTheme.textPrimary)
+                            .tint(GlassTheme.accent)
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 10)
+                    .glassCard(radius: 12)
+
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            searchText = ""
+                            isSearching = false
+                        }
+                    } label: {
+                        Text("取消")
+                            .font(.subheadline)
+                            .foregroundStyle(GlassTheme.textSecondary)
+                    }
+                }
+                .padding(.horizontal)
+                .transition(.move(edge: .top).combined(with: .opacity))
+            }
+
+            // Filter chips
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(RecordingFilter.allCases, id: \.rawValue) { filter in
+                        GlassChip(
+                            title: filter.rawValue,
+                            isActive: activeFilter == filter
+                        ) {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                activeFilter = filter
                             }
                         }
                     }
-                    .padding(.horizontal)
                 }
-                .padding(.top, 8)
+                .padding(.horizontal)
+            }
+            .padding(.top, 8)
+            .padding(.bottom, 8)
 
-                // Grouped recordings
+            // Grouped recordings
+            List {
                 let groups = groupedRecordings()
                 ForEach(groups, id: \.0) { group, items in
                     Section {
                         ForEach(items) { recording in
-                            NavigationLink(destination: RecordingDetailView(recording: recording)) {
+                            Button {
+                                selectedRecording = recording
+                            } label: {
                                 HistoryRecordingRow(recording: recording)
                             }
                             .buttonStyle(.plain)
+                            .listRowBackground(Color.clear)
+                            .listRowSeparator(.hidden)
+                            .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
                             .swipeActions(edge: .trailing) {
                                 Button(role: .destructive) {
                                     recordingToDelete = recording
@@ -260,9 +247,12 @@ struct RecordingHistoryView: View {
                     }
                 }
             }
-            .padding(.bottom, 80)
+            .listStyle(.plain)
+            .scrollContentBackground(.hidden)
+            .navigationDestination(item: $selectedRecording) { recording in
+                RecordingDetailView(recording: recording)
+            }
         }
-        .scrollContentBackground(.hidden)
     }
 
     private func deleteRecording(_ recording: Recording) {
@@ -287,7 +277,7 @@ struct HistoryRecordingRow: View {
                     .frame(width: 44, height: 44)
                 Image(systemName: "waveform")
                     .font(.system(size: 16))
-                    .foregroundStyle(GlassTheme.accent)
+                    .foregroundStyle(.white)
 
                 // AI badge
                 if recording.transcription != nil {

@@ -8,9 +8,11 @@ final class iOSAudioRecorder: NSObject {
     var currentTime: TimeInterval = 0
     var averagePower: Float = 0
 
-    private var audioRecorder: AVAudioRecorder?
+    private var audioEngine: AVAudioEngine?
+    private var audioFile: AVAudioFile?
     private var recordingURL: URL?
-    private var timer: Timer?
+    private var recordedFrames: AVAudioFrameCount = 0
+    private var recordingSampleRate: Double = 44100.0
 
     override init() {
         super.init()
@@ -18,21 +20,19 @@ final class iOSAudioRecorder: NSObject {
 
     @MainActor
     func startRecording() async -> URL? {
+        isRecording = true
+        isPaused = false
+        recordedFrames = 0
+        currentTime = 0
+        averagePower = -80.0
+
         let url = Self.newRecordingURL()
         self.recordingURL = url
-
-        let settings: [String: Any] = [
-            AVFormatIDKey: Int(kAudioFormatMPEG4AAC),
-            AVSampleRateKey: 44100.0,
-            AVNumberOfChannelsKey: 1,
-            AVEncoderAudioQualityKey: AVAudioQuality.high.rawValue,
-            AVEncoderBitRateKey: 128000
-        ]
 
         let setupSuccess = await Task.detached(priority: .userInitiated) {
             do {
                 let session = AVAudioSession.sharedInstance()
-                try session.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker])
+                try session.setCategory(.playAndRecord, mode: .voiceChat, options: [.defaultToSpeaker, .allowBluetooth])
                 try session.setActive(true)
                 return true
             } catch {
@@ -41,39 +41,82 @@ final class iOSAudioRecorder: NSObject {
             }
         }.value
 
-        guard setupSuccess else { return nil }
+        guard setupSuccess else {
+            isRecording = false
+            return nil
+        }
 
         do {
-            audioRecorder = try AVAudioRecorder(url: url, settings: settings)
-            audioRecorder?.isMeteringEnabled = true
-            audioRecorder?.record()
+            let engine = AVAudioEngine()
+            let inputNode = engine.inputNode
+            
+            do {
+                try inputNode.setVoiceProcessingEnabled(true)
+            } catch {
+                print("Failed to enable voice processing: \(error)")
+            }
 
-            isRecording = true
-            isPaused = false
-            startTimer()
+            let inputFormat = inputNode.inputFormat(forBus: 0)
+            self.recordingSampleRate = inputFormat.sampleRate > 0 ? inputFormat.sampleRate : 44100.0
+            
+            let settings: [String: Any] = [
+                AVFormatIDKey: Int(kAudioFormatMPEG4AAC),
+                AVSampleRateKey: 44100.0,
+                AVNumberOfChannelsKey: 1,
+                AVEncoderAudioQualityKey: AVAudioQuality.high.rawValue,
+                AVEncoderBitRateKey: 128000
+            ]
+            
+            audioFile = try AVAudioFile(forWriting: url, settings: settings, commonFormat: .pcmFormatFloat32, interleaved: false)
+            
+            inputNode.installTap(onBus: 0, bufferSize: 4096, format: inputFormat) { [weak self] buffer, time in
+                guard let self = self, let file = self.audioFile else { return }
+                
+                if self.isPaused { return }
+                
+                do {
+                    try file.write(from: buffer)
+                    
+                    Task { @MainActor in
+                        self.recordedFrames += buffer.frameLength
+                        self.currentTime = Double(self.recordedFrames) / self.recordingSampleRate
+                        self.updateMeters(buffer: buffer)
+                    }
+                } catch {
+                    print("Error writing audio buffer: \(error)")
+                }
+            }
 
+            engine.prepare()
+            try engine.start()
+            
+            audioEngine = engine
             return url
         } catch {
-            print("Failed to start recording: \(error)")
+            print("Failed to start engine: \(error)")
+            isRecording = false
             return nil
         }
     }
 
     @MainActor
     func stopRecording() async -> (url: URL, duration: TimeInterval)? {
-        guard let recorder = audioRecorder, let url = recordingURL else { return nil }
+        guard let engine = audioEngine, let url = recordingURL else { return nil }
 
-        let duration = recorder.currentTime
-        recorder.stop()
-
+        let duration = self.currentTime
+        
+        engine.inputNode.removeTap(onBus: 0)
+        engine.stop()
+        audioFile = nil
+        
         isRecording = false
         isPaused = false
         currentTime = 0
         averagePower = 0
-        stopTimer()
 
-        audioRecorder = nil
+        audioEngine = nil
         recordingURL = nil
+        recordedFrames = 0
 
         await Task.detached(priority: .userInitiated) {
             do {
@@ -87,29 +130,33 @@ final class iOSAudioRecorder: NSObject {
     }
 
     func pauseRecording() {
-        audioRecorder?.pause()
         isPaused = true
-        stopTimer()
     }
 
     func resumeRecording() {
-        audioRecorder?.record()
         isPaused = false
-        startTimer()
     }
 
-    private func startTimer() {
-        timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
-            guard let self, let recorder = self.audioRecorder else { return }
-            recorder.updateMeters()
-            self.currentTime = recorder.currentTime
-            self.averagePower = recorder.averagePower(forChannel: 0)
+    @MainActor
+    private func updateMeters(buffer: AVAudioPCMBuffer) {
+        guard let channelData = buffer.floatChannelData?[0] else { return }
+        let frameLength = Int(buffer.frameLength)
+        
+        var rms: Float = 0
+        for i in 0..<frameLength {
+            let sample = channelData[i]
+            rms += sample * sample
         }
-    }
-
-    private func stopTimer() {
-        timer?.invalidate()
-        timer = nil
+        rms = sqrt(rms / Float(frameLength))
+        
+        let minDb: Float = -80.0
+        var db = 20 * log10(rms)
+        if db < minDb || db.isNaN {
+            db = minDb
+        }
+        
+        let alpha: Float = 0.2
+        self.averagePower = (alpha * db) + ((1.0 - alpha) * self.averagePower)
     }
 
     static func newRecordingURL() -> URL {

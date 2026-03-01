@@ -74,7 +74,7 @@ struct TranscriptView: View {
                             self.error = nil
                             startTranscription()
                         }
-                        .buttonStyle(GlassButtonStyle(fill: GlassTheme.accent.opacity(0.3)))
+                        .glassButton()
                         .foregroundStyle(GlassTheme.accent)
                     }
                     .frame(maxWidth: .infinity)
@@ -98,7 +98,7 @@ struct TranscriptView: View {
                                 .fontWeight(.semibold)
                                 .foregroundStyle(.white)
                         }
-                        .buttonStyle(GlassButtonStyle(fill: GlassTheme.accent))
+                        .glassButton(prominent: true)
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.top, 40)
@@ -123,7 +123,7 @@ struct TranscriptView: View {
                 let polishedText = try await aiService.polishTranscription(rawText)
                 recording.transcription = polishedText
 
-                if recording.title.hasPrefix("录音 ") {
+                if recording.title.hasPrefix("录音 ") || recording.title.hasPrefix("Recording ") || recording.title.hasPrefix("Voice Memo ") {
                     Task {
                         if let title = try? await aiService.generateTitle(transcription: polishedText) {
                             let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
