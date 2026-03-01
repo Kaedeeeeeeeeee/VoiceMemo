@@ -97,12 +97,17 @@ struct ContentView: View {
         let fileURL = documentsDir.appendingPathComponent(recording.fileURL)
 
         do {
+            let session = AVAudioSession.sharedInstance()
+            try session.setCategory(.playback, mode: .default)
+            try session.setActive(true)
+
             audioPlayer?.stop()
             audioPlayer = try AVAudioPlayer(contentsOf: fileURL)
+            audioPlayer?.prepareToPlay()
             audioPlayer?.play()
             playingRecordingID = recording.id
         } catch {
-            print("Playback failed: \(error)")
+            print("Playback failed: \(error) for file: \(fileURL.path)")
         }
     }
 }
