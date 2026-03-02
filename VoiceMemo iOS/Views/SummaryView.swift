@@ -59,6 +59,7 @@ struct SummaryView: View {
     @State private var aiService = AIService()
     @State private var selectedTemplate: SummaryTemplate = .general
     @State private var error: String?
+    @State private var showPaywall = false
 
     var body: some View {
         ScrollView {
@@ -89,6 +90,10 @@ struct SummaryView: View {
                                     if let cached = recording.summaryCache[template.rawValue] {
                                         recording.summary = cached
                                     } else {
+                                        guard TrialManager.shared.claimTrialIfNeeded(for: recording) else {
+                                            showPaywall = true
+                                            return
+                                        }
                                         regenerateSummary()
                                     }
                                 }
@@ -182,6 +187,9 @@ struct SummaryView: View {
             }
         }
         .background(Color.clear)
+        .sheet(isPresented: $showPaywall) {
+            PaywallView()
+        }
     }
 
     private var noTranscriptState: some View {
@@ -231,6 +239,10 @@ struct SummaryView: View {
     }
 
     private func generateSummary() {
+        guard TrialManager.shared.claimTrialIfNeeded(for: recording) else {
+            showPaywall = true
+            return
+        }
         guard let transcription = recording.transcription else { return }
         recording.isSummarizing = true
 

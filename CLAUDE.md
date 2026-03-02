@@ -53,3 +53,8 @@ The transcription flow is two-step: Whisper (speech-to-text) → GPT-4o polish (
 - Recordings are stored as .m4a files in the app's Documents directory. `Recording.fileURL` stores only the filename, not the full path.
 - Services are instantiated as `@State` within views (not injected via environment).
 - Summary templates embed their system prompts directly and request Markdown output.
+
+## App Store 上架链接
+
+- **隐私政策**：https://podnote-api-proxy.podnote-api.workers.dev/privacy
+- **使用条款**：https://podnote-api-proxy.podnote-api.workers.dev/terms

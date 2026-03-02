@@ -50,6 +50,9 @@
             ReferencedContainer = "container:VoiceMemo.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
+      <StoreKitConfigurationFileReference
+         identifier = "../../VoiceMemo iOS/Configuration.storekit">
+      </StoreKitConfigurationFileReference>
    </LaunchAction>
    <ProfileAction
       buildConfiguration = "Release"

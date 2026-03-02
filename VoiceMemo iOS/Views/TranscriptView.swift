@@ -9,6 +9,7 @@ struct TranscriptView: View {
     @State private var editedText = ""
     @State private var transcriptionPhase = ""
     @State private var showSpeakerSheet = false
+    @State private var showPaywall = false
 
     var body: some View {
         ZStack {
@@ -154,6 +155,9 @@ struct TranscriptView: View {
         .sheet(isPresented: $showSpeakerSheet) {
             SpeakerRenameSheet(recording: recording)
         }
+        .sheet(isPresented: $showPaywall) {
+            PaywallView()
+        }
     }
 
     private var speakers: [String] {
@@ -208,6 +212,11 @@ struct TranscriptView: View {
     }
 
     private func startTranscription() {
+        guard TrialManager.shared.claimTrialIfNeeded(for: recording) else {
+            showPaywall = true
+            return
+        }
+
         recording.isTranscribing = true
 
         Task {

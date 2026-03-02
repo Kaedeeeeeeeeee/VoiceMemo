@@ -6,6 +6,7 @@ struct RecordingDetailView: View {
     @State private var showFullPlayer = false
     @State private var isLoaded = false
     @State private var pdfShareItems: [Any]?
+    @State private var showPaywall = false
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -65,6 +66,10 @@ struct RecordingDetailView: View {
                             Label("分享转写文本", systemImage: "doc.text")
                         }
                         Button {
+                            guard TrialManager.shared.claimTrialIfNeeded(for: recording) else {
+                                showPaywall = true
+                                return
+                            }
                             let text = recording.applyingSpeakerNames(to: transcription)
                             if let url = PDFRenderer.render(title: recording.title, content: text, type: "转写") {
                                 pdfShareItems = [url]
@@ -80,6 +85,10 @@ struct RecordingDetailView: View {
                             Label("分享摘要文本", systemImage: "text.quote")
                         }
                         Button {
+                            guard TrialManager.shared.claimTrialIfNeeded(for: recording) else {
+                                showPaywall = true
+                                return
+                            }
                             if let url = PDFRenderer.render(title: recording.title, content: summary, type: "摘要") {
                                 pdfShareItems = [url]
                             }
@@ -101,6 +110,9 @@ struct RecordingDetailView: View {
                 ActivitySheet(items: items)
                     .presentationDetents([.medium, .large])
             }
+        }
+        .sheet(isPresented: $showPaywall) {
+            PaywallView()
         }
         .sheet(isPresented: $showFullPlayer) {
             FullPlayerSheet(recording: recording)

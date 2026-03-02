@@ -7,15 +7,11 @@ enum TranscriptionPhase {
 
 @Observable
 final class TranscriptionService {
-    private let apiKey = APIConfig.assemblyAIKey
-    private let baseURL = "https://api.assemblyai.com/v2"
+    private let proxyBaseURL = APIConfig.proxyBaseURL
+    private let proxyAuthToken = APIConfig.proxyAuthToken
     var currentPhase: TranscriptionPhase = .idle
 
     func transcribe(audioURL: URL) async throws -> String {
-        guard !apiKey.isEmpty, apiKey != "YOUR_ASSEMBLYAI_API_KEY" else {
-            throw TranscriptionError.missingAPIKey
-        }
-
         currentPhase = .uploading
         let uploadURL = try await uploadAudio(fileURL: audioURL)
 
@@ -32,10 +28,10 @@ final class TranscriptionService {
     // MARK: - Upload audio file
 
     private func uploadAudio(fileURL: URL) async throws -> String {
-        let url = URL(string: "\(baseURL)/upload")!
+        let url = URL(string: "\(proxyBaseURL)/assemblyai/upload")!
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
-        request.setValue(apiKey, forHTTPHeaderField: "authorization")
+        request.setValue(proxyAuthToken, forHTTPHeaderField: "X-App-Token")
         request.setValue("application/octet-stream", forHTTPHeaderField: "Content-Type")
 
         let audioData = try Data(contentsOf: fileURL)
@@ -60,10 +56,10 @@ final class TranscriptionService {
     // MARK: - Request transcription with speaker diarization
 
     private func requestTranscription(uploadURL: String) async throws -> String {
-        let url = URL(string: "\(baseURL)/transcript")!
+        let url = URL(string: "\(proxyBaseURL)/assemblyai/transcript")!
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
-        request.setValue(apiKey, forHTTPHeaderField: "authorization")
+        request.setValue(proxyAuthToken, forHTTPHeaderField: "X-App-Token")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
         let body: [String: Any] = [
@@ -93,11 +89,11 @@ final class TranscriptionService {
     // MARK: - Poll for result
 
     private func pollForResult(id: String) async throws -> [[String: Any]] {
-        let url = URL(string: "\(baseURL)/transcript/\(id)")!
+        let url = URL(string: "\(proxyBaseURL)/assemblyai/transcript/\(id)")!
 
         while true {
             var request = URLRequest(url: url)
-            request.setValue(apiKey, forHTTPHeaderField: "authorization")
+            request.setValue(proxyAuthToken, forHTTPHeaderField: "X-App-Token")
 
             let (data, response) = try await URLSession.shared.data(for: request)
 
@@ -156,15 +152,12 @@ final class TranscriptionService {
 }
 
 enum TranscriptionError: LocalizedError {
-    case missingAPIKey
     case invalidResponse
     case apiError(statusCode: Int, message: String)
     case transcriptionFailed(message: String)
 
     var errorDescription: String? {
         switch self {
-        case .missingAPIKey:
-            return "未设置 AssemblyAI API Key。请在 APIConfig 中配置。"
         case .invalidResponse:
             return "服务器返回了无效的响应"
         case .apiError(let statusCode, let message):

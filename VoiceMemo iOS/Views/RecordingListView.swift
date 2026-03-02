@@ -292,6 +292,17 @@ struct HistoryRecordingRow: View {
                         )
                         .offset(x: 16, y: -16)
                 }
+
+                // Trial badge
+                if TrialManager.shared.isTrialRecording(recording) && !SubscriptionManager.shared.isSubscribed {
+                    Text("试用")
+                        .font(.system(size: 7, weight: .bold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 2)
+                        .background(Color.green, in: Capsule())
+                        .offset(x: -16, y: -16)
+                }
             }
 
             // Content

@@ -3,7 +3,8 @@ import Observation
 
 @Observable
 final class AIService {
-    private let apiKey = APIConfig.openAIKey
+    private let proxyBaseURL = APIConfig.proxyBaseURL
+    private let proxyAuthToken = APIConfig.proxyAuthToken
 
     struct ConversationMessage {
         let role: String
@@ -87,14 +88,10 @@ final class AIService {
     }
 
     private func callOpenAIAPI(messages: [[String: String]]) async throws -> String {
-        guard !apiKey.isEmpty else {
-            throw AIServiceError.missingAPIKey
-        }
-
-        let url = URL(string: "https://api.openai.com/v1/chat/completions")!
+        let url = URL(string: "\(proxyBaseURL)/openai/v1/chat/completions")!
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
-        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        request.setValue(proxyAuthToken, forHTTPHeaderField: "X-App-Token")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
         let body: [String: Any] = [
@@ -130,14 +127,11 @@ final class AIService {
 }
 
 enum AIServiceError: LocalizedError {
-    case missingAPIKey
     case invalidResponse
     case apiError(statusCode: Int, message: String)
 
     var errorDescription: String? {
         switch self {
-        case .missingAPIKey:
-            return "未设置 OpenAI API Key。请在设置中配置。"
         case .invalidResponse:
             return "服务器返回了无效的响应"
         case .apiError(let statusCode, let message):

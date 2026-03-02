@@ -29,6 +29,7 @@ struct AIConversationView: View {
     @State private var conversations: [ChatConversation] = []
     @State private var activeConversation: ChatConversation?
     @FocusState private var isInputFocused: Bool
+    @State private var showPaywall = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -57,6 +58,9 @@ struct AIConversationView: View {
             }
         }
         .background(Color.clear)
+        .sheet(isPresented: $showPaywall) {
+            PaywallView()
+        }
         .task {
             loadConversations()
         }
@@ -335,6 +339,11 @@ struct AIConversationView: View {
     private func sendMessage() {
         let text = inputText.trimmingCharacters(in: .whitespaces)
         guard !text.isEmpty, let transcription = recording.transcription else { return }
+
+        guard TrialManager.shared.claimTrialIfNeeded(for: recording) else {
+            showPaywall = true
+            return
+        }
 
         // If we're in list state (suggestions visible, no history), enter active state first
         if case .list = viewState {

@@ -8,6 +8,10 @@ struct VoiceMemoiOSApp: App {
     let modelContainer: ModelContainer
 
     init() {
+        // Initialize subscription listener early
+        _ = SubscriptionManager.shared
+        _ = TrialManager.shared
+
         let container = try! ModelContainer(for: Recording.self, ChatConversation.self, PersistedChatMessage.self)
         self.modelContainer = container
 
