@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>NSScreenCaptureUsageDescription</key>
+	<string>PodNote 需要屏幕录制权限来捕获应用程序的音频输出</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>PodNote 需要麦克风权限来录制语音备忘录</string>
+</dict>
+</plist>

@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.zhangshifeng.VoiceMemo</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>podnote</string>
+			</array>
+		</dict>
+	</array>
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>bear</string>
+		<string>obsidian</string>
+		<string>things</string>
+		<string>omnifocus</string>
+	</array>
+	<key>NSSupportsLiveActivities</key>
+	<true/>
+	<key>NSRemindersUsageDescription</key>
+	<string>PodNote 需要访问提醒事项以创建录音相关的提醒。</string>
+</dict>
+</plist>
