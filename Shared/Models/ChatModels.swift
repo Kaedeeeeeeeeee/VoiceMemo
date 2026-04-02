@@ -9,9 +9,9 @@ final class ChatConversation {
     var updatedAt: Date
     @Relationship(deleteRule: .cascade, inverse: \PersistedChatMessage.conversation)
     var messages: [PersistedChatMessage] = []
-    var recordingID: UUID
+    var recordingID: UUID?
 
-    init(recordingID: UUID, title: String = "") {
+    init(recordingID: UUID? = nil, title: String = "") {
         self.id = UUID()
         self.title = title
         self.createdAt = .now
@@ -27,11 +27,13 @@ final class PersistedChatMessage {
     var content: String
     var timestamp: Date
     var conversation: ChatConversation?
+    var sourceRecordingIDs: [UUID] = []
 
-    init(role: String, content: String) {
+    init(role: String, content: String, sourceRecordingIDs: [UUID] = []) {
         self.id = UUID()
         self.role = role
         self.content = content
         self.timestamp = .now
+        self.sourceRecordingIDs = sourceRecordingIDs
     }
 }

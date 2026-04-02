@@ -17,6 +17,14 @@ final class Recording {
     var isSynced: Bool
     var summaryCache: [String: String] = [:]
     var speakerNames: [String: String] = [:]
+    var speakerSegmentsJSON: String?
+    var tags: [String] = []
+    @Relationship(deleteRule: .cascade, inverse: \RecordingMarker.recording)
+    var markers: [RecordingMarker] = []
+
+    var sortedMarkers: [RecordingMarker] {
+        markers.sorted { $0.timestamp < $1.timestamp }
+    }
 
     init(
         title: String,
@@ -65,6 +73,27 @@ final class Recording {
         return speakers
     }
 
+    #if os(iOS)
+    var speakerUtterances: [SpeakerUtterance]? {
+        guard let json = speakerSegmentsJSON, let data = json.data(using: .utf8) else { return nil }
+        return try? JSONDecoder().decode([SpeakerUtterance].self, from: data)
+    }
+
+    func setSpeakerUtterances(_ utterances: [SpeakerUtterance]) {
+        if let data = try? JSONEncoder().encode(utterances),
+           let json = String(data: data, encoding: .utf8) {
+            speakerSegmentsJSON = json
+        }
+    }
+
+    func segmentsForSpeaker(_ speakerLabel: String) -> [SpeakerSegment] {
+        guard let utterances = speakerUtterances else { return [] }
+        return utterances
+            .filter { $0.speaker == speakerLabel }
+            .map { SpeakerSegment(startTime: Double($0.startMs) / 1000.0, endTime: Double($0.endMs) / 1000.0) }
+    }
+    #endif
+
     var formattedDuration: String {
         let minutes = Int(duration) / 60
         let seconds = Int(duration) % 60
@@ -81,4 +110,6 @@ final class Recording {
 enum RecordingSource: String, Codable {
     case watch
     case phone
+    case mac
+    case phoneCall
 }
