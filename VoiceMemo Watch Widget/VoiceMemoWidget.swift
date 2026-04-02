@@ -5,22 +5,43 @@ struct VoiceMemoWidgetEntry: TimelineEntry {
     let date: Date
     let isRecording: Bool
     let recordingDuration: TimeInterval?
+    let lastRecordingTitle: String?
+    let lastRecordingDate: Date?
 }
 
 struct VoiceMemoWidgetProvider: TimelineProvider {
+    private static let suiteName = "group.com.zhangshifeng.VoiceMemo"
+    private static let titleKey = "lastRecordingTitle"
+    private static let dateKey = "lastRecordingDate"
+
     func placeholder(in context: Context) -> VoiceMemoWidgetEntry {
-        VoiceMemoWidgetEntry(date: .now, isRecording: false, recordingDuration: nil)
+        VoiceMemoWidgetEntry(date: .now, isRecording: false, recordingDuration: nil, lastRecordingTitle: nil, lastRecordingDate: nil)
     }
 
     func getSnapshot(in context: Context, completion: @escaping (VoiceMemoWidgetEntry) -> Void) {
-        let entry = VoiceMemoWidgetEntry(date: .now, isRecording: false, recordingDuration: nil)
+        let entry = makeEntry()
         completion(entry)
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<VoiceMemoWidgetEntry>) -> Void) {
-        let entry = VoiceMemoWidgetEntry(date: .now, isRecording: false, recordingDuration: nil)
+        let entry = makeEntry()
         let timeline = Timeline(entries: [entry], policy: .after(.now.addingTimeInterval(300)))
         completion(timeline)
+    }
+
+    private func makeEntry() -> VoiceMemoWidgetEntry {
+        let defaults = UserDefaults(suiteName: Self.suiteName)
+        let title = defaults?.string(forKey: Self.titleKey)
+        let dateInterval = defaults?.double(forKey: Self.dateKey)
+        let date = dateInterval.map { $0 > 0 ? Date(timeIntervalSince1970: $0) : nil } ?? nil
+
+        return VoiceMemoWidgetEntry(
+            date: .now,
+            isRecording: false,
+            recordingDuration: nil,
+            lastRecordingTitle: title,
+            lastRecordingDate: date
+        )
     }
 }
 
@@ -65,6 +86,16 @@ struct VoiceMemoWidgetEntryView: View {
                     Text(formatDuration(duration))
                         .font(.caption)
                         .foregroundStyle(.red)
+                } else if let title = entry.lastRecordingTitle {
+                    Text(title)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                    if let date = entry.lastRecordingDate {
+                        Text(date, style: .relative)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
                 } else {
                     Text("点击开始录音")
                         .font(.caption)
@@ -122,6 +153,6 @@ struct VoiceMemoWidget: Widget {
 #Preview(as: .accessoryCircular) {
     VoiceMemoWidget()
 } timeline: {
-    VoiceMemoWidgetEntry(date: .now, isRecording: false, recordingDuration: nil)
-    VoiceMemoWidgetEntry(date: .now, isRecording: true, recordingDuration: 65)
+    VoiceMemoWidgetEntry(date: .now, isRecording: false, recordingDuration: nil, lastRecordingTitle: nil, lastRecordingDate: nil)
+    VoiceMemoWidgetEntry(date: .now, isRecording: true, recordingDuration: 65, lastRecordingTitle: nil, lastRecordingDate: nil)
 }

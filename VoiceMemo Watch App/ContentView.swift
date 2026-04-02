@@ -9,6 +9,7 @@ struct ContentView: View {
     @State private var playingRecordingID: UUID?
     @State private var audioPlayer: AVAudioPlayer?
     @State private var navigateToRecording = false
+    @State private var recordingToDelete: Recording?
 
     var body: some View {
         ZStack {
@@ -62,27 +63,46 @@ struct ContentView: View {
     }
 
     private var recordingsList: some View {
-        ScrollView {
-            VStack(spacing: 8) {
-                ForEach(recordings) { recording in
-                    Button {
-                        togglePlayback(recording)
-                    } label: {
-                        HStack {
-                            RecordingRowView(recording: recording)
+        List {
+            ForEach(recordings) { recording in
+                Button {
+                    togglePlayback(recording)
+                } label: {
+                    HStack {
+                        RecordingRowView(recording: recording)
 
-                            if playingRecordingID == recording.id {
-                                Image(systemName: "speaker.wave.2.fill")
-                                    .foregroundStyle(WatchGlassTheme.accent)
-                                    .font(.caption)
-                            }
+                        if playingRecordingID == recording.id {
+                            Image(systemName: "speaker.wave.2.fill")
+                                .foregroundStyle(WatchGlassTheme.accent)
+                                .font(.caption)
                         }
                     }
-                    .buttonStyle(.plain)
-                    .watchGlassCard()
+                }
+                .buttonStyle(.plain)
+                .watchGlassCard()
+            }
+            .onDelete { indexSet in
+                if let index = indexSet.first {
+                    recordingToDelete = recordings[index]
                 }
             }
-            .padding(.horizontal, 4)
+        }
+        .listStyle(.carousel)
+        .alert("确认删除", isPresented: Binding(
+            get: { recordingToDelete != nil },
+            set: { if !$0 { recordingToDelete = nil } }
+        )) {
+            Button("删除", role: .destructive) {
+                if let recording = recordingToDelete {
+                    deleteRecording(recording)
+                }
+                recordingToDelete = nil
+            }
+            Button("取消", role: .cancel) {
+                recordingToDelete = nil
+            }
+        } message: {
+            Text("确定要删除这条录音吗？此操作不可撤销。")
         }
     }
 
@@ -109,5 +129,21 @@ struct ContentView: View {
         } catch {
             print("Playback failed: \(error) for file: \(fileURL.path)")
         }
+    }
+
+    private func deleteRecording(_ recording: Recording) {
+        // Stop playback if this recording is playing
+        if playingRecordingID == recording.id {
+            audioPlayer?.stop()
+            playingRecordingID = nil
+        }
+
+        // Delete audio file
+        let documentsDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        let fileURL = documentsDir.appendingPathComponent(recording.fileURL)
+        try? FileManager.default.removeItem(at: fileURL)
+
+        // Delete from SwiftData
+        modelContext.delete(recording)
     }
 }

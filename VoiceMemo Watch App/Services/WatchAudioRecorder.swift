@@ -1,5 +1,6 @@
 import AVFoundation
 import WatchKit
+import WidgetKit
 import Observation
 
 @Observable
@@ -48,7 +49,9 @@ final class WatchAudioRecorder: NSObject {
 
             return url
         } catch {
+            #if DEBUG
             print("Failed to start recording: \(error)")
+            #endif
             isRecording = false
             return nil
         }
@@ -75,8 +78,13 @@ final class WatchAudioRecorder: NSObject {
         do {
             try AVAudioSession.sharedInstance().setActive(false)
         } catch {
+            #if DEBUG
             print("Failed to deactivate audio session: \(error)")
+            #endif
         }
+
+        // Save last recording info for Widget
+        saveLastRecordingInfo(title: url.deletingPathExtension().lastPathComponent)
 
         return (url, duration)
     }
@@ -127,5 +135,12 @@ final class WatchAudioRecorder: NSObject {
 
     static func recordingsDirectory() -> URL {
         FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+    }
+
+    private func saveLastRecordingInfo(title: String) {
+        let defaults = UserDefaults(suiteName: "group.com.zhangshifeng.VoiceMemo")
+        defaults?.set(title, forKey: "lastRecordingTitle")
+        defaults?.set(Date.now.timeIntervalSince1970, forKey: "lastRecordingDate")
+        WidgetCenter.shared.reloadAllTimelines()
     }
 }

@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import WatchKit
 
 struct RecordingView: View {
     @Environment(\.modelContext) private var modelContext
@@ -8,7 +9,12 @@ struct RecordingView: View {
     @State private var recordingURL: URL?
     @State private var amplitudeHistory: [CGFloat] = Array(repeating: 0, count: 20)
     @State private var animationPhase: CGFloat = 0
+    @State private var stopButtonProgress: CGFloat = 0
+    @State private var isLongPressingStop = false
+    @State private var showCompletionMessage = false
     var autoStart = false
+
+    private let stopHoldDuration: CGFloat = 1.5
 
     private var normalizedPower: CGFloat {
         guard recorder.isRecording, !recorder.isPaused else { return 0 }
@@ -22,85 +28,122 @@ struct RecordingView: View {
         ZStack {
             WatchGlassTheme.background.ignoresSafeArea()
 
-            VStack(spacing: 8) {
-                // Timer display
-                Text(formattedTime)
-                    .font(.system(size: 40, weight: .light, design: .monospaced))
-                    .foregroundStyle(WatchGlassTheme.textPrimary)
+            if showCompletionMessage {
+                // Completion screen
+                VStack(spacing: 12) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 40))
+                        .foregroundStyle(.green)
 
-                // Recording status capsule
-                if recorder.isRecording {
-                    HStack(spacing: 6) {
-                        PulsingDot()
-                        Text(recorder.isPaused ? "已暂停" : "录音中")
-                            .font(.caption)
-                            .foregroundStyle(recorder.isPaused ? WatchGlassTheme.textTertiary : WatchGlassTheme.textPrimary)
+                    Text("录音已保存")
+                        .font(.headline)
+                        .foregroundStyle(WatchGlassTheme.textPrimary)
+
+                    Text("请前往 iPhone 或 Mac 查看")
+                        .font(.caption)
+                        .foregroundStyle(WatchGlassTheme.textTertiary)
+                        .multilineTextAlignment(.center)
+
+                    Button {
+                        dismiss()
+                    } label: {
+                        Text("完成")
+                            .font(.subheadline)
                     }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 4)
-                    .glassEffect(.regular, in: .capsule)
+                    .buttonStyle(.glass)
+                    .padding(.top, 8)
                 }
+                .padding()
+            } else {
+                VStack(spacing: 8) {
+                    // Timer display
+                    Text(formattedTime)
+                        .font(.system(size: 40, weight: .light, design: .monospaced))
+                        .foregroundStyle(WatchGlassTheme.textPrimary)
 
-                // Waveform visualization
-                TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { timeline in
-                    Canvas { context, size in
-                        drawWaveform(context: context, size: size)
-                    }
-                    .frame(height: 40)
-                    .onChange(of: timeline.date) {
-                        animationPhase += 0.05
-                    }
-                }
-                .padding(.horizontal, 4)
-
-                Spacer()
-
-                // Controls
-                HStack(spacing: 20) {
+                    // Recording status capsule
                     if recorder.isRecording {
-                        // Pause/Resume button
-                        Button {
-                            if recorder.isPaused {
-                                recorder.resumeRecording()
-                            } else {
-                                recorder.pauseRecording()
-                            }
-                        } label: {
-                            Image(systemName: recorder.isPaused ? "play.fill" : "pause.fill")
-                                .font(.title2)
-                                .frame(width: 44, height: 44)
+                        HStack(spacing: 6) {
+                            PulsingDot()
+                            Text(recorder.isPaused ? "已暂停" : "录音中")
+                                .font(.caption)
+                                .foregroundStyle(recorder.isPaused ? WatchGlassTheme.textTertiary : WatchGlassTheme.textPrimary)
                         }
-                        .buttonStyle(.glass)
-                        .buttonBorderShape(.circle)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 4)
+                        .glassEffect(.regular, in: .capsule)
+                    }
 
-                        // Stop button
-                        Button {
-                            stopAndSave()
-                        } label: {
-                            Image(systemName: "stop.fill")
-                                .font(.title2)
-                                .frame(width: 44, height: 44)
+                    // Waveform visualization
+                    TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { timeline in
+                        Canvas { context, size in
+                            drawWaveform(context: context, size: size)
                         }
-                        .buttonStyle(.glass)
-                        .buttonBorderShape(.circle)
-                        .tint(WatchGlassTheme.accent)
-                    } else {
-                        // Record button
-                        Button {
-                            recordingURL = recorder.startRecording()
-                        } label: {
-                            Image(systemName: "mic.fill")
-                                .font(.title)
-                                .frame(width: 60, height: 60)
+                        .frame(height: 40)
+                        .onChange(of: timeline.date) {
+                            animationPhase += 0.05
                         }
-                        .buttonStyle(.glass)
-                        .buttonBorderShape(.circle)
-                        .tint(WatchGlassTheme.accent)
-                        .accessibilityLabel("开始录音")
+                    }
+                    .padding(.horizontal, 4)
+
+                    if recorder.isRecording {
+                        Text("长按停止按钮结束录音")
+                            .font(.system(size: 10))
+                            .foregroundStyle(WatchGlassTheme.textMuted)
+                    }
+
+                    Spacer()
+
+                    // Controls
+                    HStack(spacing: 20) {
+                        if recorder.isRecording {
+                            // Pause/Resume button
+                            Button {
+                                if recorder.isPaused {
+                                    recorder.resumeRecording()
+                                } else {
+                                    recorder.pauseRecording()
+                                }
+                            } label: {
+                                Image(systemName: recorder.isPaused ? "play.fill" : "pause.fill")
+                                    .font(.title2)
+                                    .frame(width: 44, height: 44)
+                            }
+                            .buttonStyle(.glass)
+                            .buttonBorderShape(.circle)
+
+                            // Stop button (long press)
+                            WatchLongPressStopButton(progress: stopButtonProgress, size: 44)
+                                .gesture(
+                                    DragGesture(minimumDistance: 0)
+                                        .onChanged { _ in
+                                            if !isLongPressingStop {
+                                                isLongPressingStop = true
+                                                startStopHoldTimer()
+                                            }
+                                        }
+                                        .onEnded { _ in
+                                            cancelStopHold()
+                                        }
+                                )
+                        } else {
+                            // Record button
+                            Button {
+                                recordingURL = recorder.startRecording()
+                            } label: {
+                                Image(systemName: "mic.fill")
+                                    .font(.title)
+                                    .frame(width: 60, height: 60)
+                            }
+                            .buttonStyle(.glass)
+                            .buttonBorderShape(.circle)
+                            .tint(WatchGlassTheme.accent)
+                            .accessibilityLabel("开始录音")
+                        }
                     }
                 }
+                .padding()
             }
-            .padding()
         }
         .toolbar(.hidden, for: .navigationBar)
         .onChange(of: normalizedPower) {
@@ -177,9 +220,31 @@ struct RecordingView: View {
         )
         modelContext.insert(recording)
 
+        let recordingId = recording.id.uuidString
+
+        // Listen for transfer completion
+        let context = modelContext
+        NotificationCenter.default.addObserver(
+            forName: .fileTransferCompleted,
+            object: nil,
+            queue: .main
+        ) { notification in
+            guard let userInfo = notification.userInfo,
+                  let notifId = userInfo["recordingId"] as? String,
+                  notifId == recordingId,
+                  let success = userInfo["success"] as? Bool,
+                  success else { return }
+
+            let descriptor = FetchDescriptor<Recording>(predicate: #Predicate { $0.id.uuidString == recordingId })
+            if let rec = try? context.fetch(descriptor).first {
+                rec.isSynced = true
+                try? context.save()
+            }
+        }
+
         // Send to iPhone
         let metadata: [String: Any] = [
-            "id": recording.id.uuidString,
+            "id": recordingId,
             "title": recording.title,
             "duration": recording.duration,
             "date": recording.date.timeIntervalSince1970,
@@ -187,6 +252,73 @@ struct RecordingView: View {
         ]
         WatchConnectivityService.shared.sendRecording(url: result.url, metadata: metadata)
 
-        dismiss()
+        // Show completion message instead of dismissing
+        withAnimation {
+            showCompletionMessage = true
+        }
+    }
+
+    // MARK: - Long Press Stop
+
+    private func startStopHoldTimer() {
+        stopButtonProgress = 0
+        let startTime = Date()
+
+        // Light haptic at start
+        WKInterfaceDevice.current().play(.click)
+
+        Timer.scheduledTimer(withTimeInterval: 1.0 / 60.0, repeats: true) { timer in
+            let elapsed = Date().timeIntervalSince(startTime)
+            let progress = min(CGFloat(elapsed) / stopHoldDuration, 1.0)
+            stopButtonProgress = progress
+
+            if progress >= 1.0 {
+                timer.invalidate()
+                isLongPressingStop = false
+
+                // Strong haptic on complete
+                WKInterfaceDevice.current().play(.success)
+
+                stopAndSave()
+
+                withAnimation(.easeOut(duration: 0.3)) {
+                    stopButtonProgress = 0
+                }
+            }
+        }
+    }
+
+    private func cancelStopHold() {
+        isLongPressingStop = false
+        withAnimation(.easeOut(duration: 0.3)) {
+            stopButtonProgress = 0
+        }
+    }
+}
+
+// MARK: - Watch Long Press Stop Button
+
+private struct WatchLongPressStopButton: View {
+    let progress: CGFloat
+    let size: CGFloat
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .fill(Color.white.opacity(0.15))
+                .frame(width: size, height: size)
+
+            Circle()
+                .trim(from: 0, to: progress)
+                .stroke(WatchGlassTheme.accent, style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                .frame(width: size + 6, height: size + 6)
+                .rotationEffect(.degrees(-90))
+                .animation(.linear(duration: 0.016), value: progress)
+
+            Image(systemName: "stop.fill")
+                .font(.title2)
+                .foregroundStyle(.white)
+        }
+        .frame(width: size + 10, height: size + 10)
     }
 }
