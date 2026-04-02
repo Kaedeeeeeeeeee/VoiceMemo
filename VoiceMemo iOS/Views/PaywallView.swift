@@ -21,23 +21,33 @@ struct PaywallView: View {
                                 .foregroundStyle(GlassTheme.accent)
                                 .padding(.top, 32)
 
-                            Text("解锁全部 AI 功能")
+                            Text(String(localized: "解锁全部 AI 功能"))
                                 .font(.title2)
                                 .fontWeight(.bold)
                                 .foregroundStyle(GlassTheme.textPrimary)
 
-                            Text("订阅 PodNote Pro，释放录音的全部潜力")
+                            Text(String(localized: "订阅 PodNote Pro，释放录音的全部潜力"))
                                 .font(.subheadline)
                                 .foregroundStyle(GlassTheme.textTertiary)
                                 .multilineTextAlignment(.center)
+
+                            if !subscriptionManager.isSubscribed {
+                                let remaining = TrialManager.shared.remainingFreeUses
+                                Text(String(localized: "本月剩余 \(remaining) 次免费 AI 使用"))
+                                    .font(.caption)
+                                    .foregroundStyle(remaining > 0 ? GlassTheme.accent : .red)
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 6)
+                                    .glassCard(radius: 12)
+                            }
                         }
 
                         // Feature list
                         VStack(alignment: .leading, spacing: 14) {
-                            featureRow(icon: "waveform.badge.mic", text: "无限语音转写")
-                            featureRow(icon: "doc.text.magnifyingglass", text: "智能摘要生成")
-                            featureRow(icon: "bubble.left.and.bubble.right", text: "AI 对话问答")
-                            featureRow(icon: "doc.richtext", text: "PDF 导出分享")
+                            featureRow(icon: "waveform.badge.mic", text: String(localized: "无限语音转写"))
+                            featureRow(icon: "doc.text.magnifyingglass", text: String(localized: "智能摘要生成"))
+                            featureRow(icon: "bubble.left.and.bubble.right", text: String(localized: "AI 对话问答"))
+                            featureRow(icon: "doc.richtext", text: String(localized: "PDF 导出分享"))
                         }
                         .padding(20)
                         .glassCard()
@@ -48,16 +58,16 @@ struct PaywallView: View {
                             if let monthly = subscriptionManager.monthlyProduct {
                                 subscriptionCard(
                                     product: monthly,
-                                    title: "月度订阅",
-                                    subtitle: "\(monthly.displayPrice)/月"
+                                    title: String(localized: "月度订阅"),
+                                    subtitle: "\(monthly.displayPrice)/\(String(localized: "月"))"
                                 )
                             }
 
                             if let yearly = subscriptionManager.yearlyProduct {
                                 subscriptionCard(
                                     product: yearly,
-                                    title: "年度订阅",
-                                    subtitle: yearlyMonthlyPrice ?? "\(yearly.displayPrice)/年",
+                                    title: String(localized: "年度订阅"),
+                                    subtitle: yearlyMonthlyPrice ?? "\(yearly.displayPrice)/\(String(localized: "年"))",
                                     badge: savingsBadge
                                 )
                             }
@@ -81,7 +91,7 @@ struct PaywallView: View {
                                     ProgressView()
                                         .tint(.white)
                                 } else {
-                                    Text("订阅")
+                                    Text(String(localized: "订阅"))
                                         .fontWeight(.semibold)
                                 }
                             }
@@ -97,7 +107,7 @@ struct PaywallView: View {
                         Button {
                             Task { await subscriptionManager.restore() }
                         } label: {
-                            Text("恢复购买")
+                            Text(String(localized: "恢复购买"))
                                 .font(.subheadline)
                                 .foregroundStyle(GlassTheme.textTertiary)
                         }
@@ -107,7 +117,7 @@ struct PaywallView: View {
                             NavigationLink {
                                 TermsOfServiceView()
                             } label: {
-                                Text("使用条款")
+                                Text(String(localized: "使用条款"))
                                     .font(.caption)
                                     .foregroundStyle(GlassTheme.textMuted)
                             }
@@ -119,7 +129,7 @@ struct PaywallView: View {
                             NavigationLink {
                                 PrivacyPolicyView()
                             } label: {
-                                Text("隐私政策")
+                                Text(String(localized: "隐私政策"))
                                     .font(.caption)
                                     .foregroundStyle(GlassTheme.textMuted)
                             }
@@ -216,7 +226,7 @@ struct PaywallView: View {
         formatter.locale = yearly.priceFormatStyle.locale
         formatter.maximumFractionDigits = 0
         guard let formatted = formatter.string(from: monthlyPrice) else { return nil }
-        return "\(formatted)/月"
+        return "\(formatted)/\(String(localized: "月"))"
     }
 
     private var savingsBadge: String? {
@@ -225,7 +235,7 @@ struct PaywallView: View {
         let monthlyAnnual = monthly.price * 12
         guard monthlyAnnual > 0 else { return nil }
         let savings = NSDecimalNumber(decimal: (monthlyAnnual - yearly.price) / monthlyAnnual * 100).intValue
-        return savings > 0 ? "省 \(savings)%" : nil
+        return savings > 0 ? String(localized: "省 \(savings)%") : nil
     }
 
     // MARK: - Actions

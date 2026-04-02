@@ -215,12 +215,16 @@ struct RecordingHistoryView: View {
                     Section {
                         ForEach(items) { recording in
                             Button {
-                                selectedRecording = recording
+                                if !recording.isTranscribing {
+                                    selectedRecording = recording
+                                }
                             } label: {
                                 HistoryRecordingRow(recording: recording)
                                     .contentShape(Rectangle())
+                                    .opacity(recording.isTranscribing ? 0.6 : 1.0)
                             }
                             .buttonStyle(.plain)
+                            .disabled(recording.isTranscribing)
                             .listRowBackground(Color.clear)
                             .listRowSeparator(.hidden)
                             .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
@@ -260,6 +264,18 @@ struct RecordingHistoryView: View {
         let documentsDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         let fileURL = documentsDir.appendingPathComponent(recording.fileURL)
         try? FileManager.default.removeItem(at: fileURL)
+
+        // Clean up marker photo files
+        for marker in recording.markers {
+            if let photoFileName = marker.photoFileName {
+                let photoURL = documentsDir.appendingPathComponent(photoFileName)
+                try? FileManager.default.removeItem(at: photoURL)
+            }
+        }
+
+        // Clean up embedding chunks
+        EmbeddingService.shared.deleteChunks(for: recording.id, context: modelContext)
+
         modelContext.delete(recording)
     }
 }
@@ -312,6 +328,19 @@ struct HistoryRecordingRow: View {
                     .fontWeight(.medium)
                     .foregroundStyle(GlassTheme.textPrimary)
                     .lineLimit(1)
+
+                if !recording.tags.isEmpty {
+                    HStack(spacing: 4) {
+                        ForEach(recording.tags, id: \.self) { tag in
+                            Text(tag)
+                                .font(.system(size: 9, weight: .medium))
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(GlassTheme.accent.opacity(0.8), in: Capsule())
+                        }
+                    }
+                }
 
                 HStack(spacing: 8) {
                     Text(recording.date.shortDisplay)

@@ -1,9 +1,12 @@
 import SwiftUI
+import SwiftData
 
 struct TranscriptView: View {
     @Bindable var recording: Recording
+    @Environment(\.modelContext) private var modelContext
     @State private var transcriptionService = TranscriptionService()
     @State private var aiService = AIService()
+    @State private var voiceprintService = VoiceprintService()
     @State private var error: String?
     @State private var isEditing = false
     @State private var editedText = ""
@@ -17,12 +20,35 @@ struct TranscriptView: View {
                     ScrollView {
                         VStack(alignment: .leading, spacing: 16) {
                             VStack(spacing: 16) {
-                                ProgressView()
-                                    .tint(GlassTheme.accent)
-                                    .scaleEffect(1.2)
-                                Text(phaseText.isEmpty ? String(localized: "正在转写...") : phaseText)
-                                    .font(.subheadline)
-                                    .foregroundStyle(GlassTheme.textSecondary)
+                                if let progress = transcriptionService.phaseProgress, progress > 0 {
+                                    ProgressView(value: progress)
+                                        .tint(GlassTheme.accent)
+                                        .padding(.horizontal, 40)
+
+                                    if transcriptionService.currentPhase == .polling {
+                                        let elapsed = transcriptionService.pollingElapsedSeconds
+                                        Text("已等待 \(elapsed) 秒...")
+                                            .font(.subheadline)
+                                            .foregroundStyle(GlassTheme.textSecondary)
+                                    } else if transcriptionService.currentPhase == .uploading {
+                                        Text(String(localized: "正在上传 \(Int(progress * 100))%"))
+                                            .font(.subheadline)
+                                            .foregroundStyle(GlassTheme.textSecondary)
+                                    }
+                                } else {
+                                    ProgressView()
+                                        .tint(GlassTheme.accent)
+                                        .scaleEffect(1.2)
+                                    Text(phaseText.isEmpty ? String(localized: "正在转写...") : phaseText)
+                                        .font(.subheadline)
+                                        .foregroundStyle(GlassTheme.textSecondary)
+                                }
+
+                                if transcriptionService.totalChunks > 1 {
+                                    Text(String(localized: "分片 \(transcriptionService.currentChunk)/\(transcriptionService.totalChunks)"))
+                                        .font(.caption)
+                                        .foregroundStyle(GlassTheme.textTertiary)
+                                }
                             }
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 40)
@@ -38,9 +64,9 @@ struct TranscriptView: View {
                                 if !speakers.isEmpty {
                                     speakerBanner
                                 }
-                                Text(recording.applyingSpeakerNames(to: recording.transcription ?? ""))
-                                    .font(.body)
-                                    .foregroundStyle(GlassTheme.textSecondary)
+                                TappableTimestampTextView(
+                                    text: recording.applyingSpeakerNames(to: recording.transcription ?? "")
+                                )
                                     .textSelection(.enabled)
                                     .padding()
                                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -129,6 +155,10 @@ struct TranscriptView: View {
                             if isEditing {
                                 recording.transcription = editedText
                                 isEditing = false
+                                // Regenerate embeddings after edit
+                                Task {
+                                    try? await EmbeddingService.shared.generateEmbeddings(for: recording, context: modelContext)
+                                }
                             } else {
                                 editedText = recording.transcription ?? ""
                                 isEditing = true
@@ -224,11 +254,22 @@ struct TranscriptView: View {
             let url = documentsDir.appendingPathComponent(recording.fileURL)
 
             do {
-                let rawText = try await transcriptionService.transcribe(audioURL: url)
+                let result = try await transcriptionService.transcribeWithUtterances(audioURL: url)
+
+                // Store raw utterance data for voiceprint enrollment
+                recording.setSpeakerUtterances(result.utterances)
 
                 transcriptionPhase = String(localized: "正在智能润色...")
-                let polishedText = try await aiService.polishTranscription(rawText)
+                let polishedText = try await aiService.polishTranscription(result.formattedText)
                 recording.transcription = polishedText
+
+                // Auto-match speakers against saved voiceprints
+                autoMatchSpeakers(audioURL: url, utterances: result.utterances)
+
+                // Generate embeddings for knowledge base search
+                Task {
+                    try? await EmbeddingService.shared.generateEmbeddings(for: recording, context: modelContext)
+                }
 
                 if recording.title.hasPrefix("录音 ") || recording.title.hasPrefix("Recording ") || recording.title.hasPrefix("Voice Memo ") {
                     Task {
@@ -240,10 +281,32 @@ struct TranscriptView: View {
                         }
                     }
                 }
+
+                // Auto-classify recording with tags
+                if recording.tags.isEmpty {
+                    Task {
+                        if let tags = try? await aiService.classifyRecording(transcription: polishedText), !tags.isEmpty {
+                            recording.tags = tags
+                        }
+                    }
+                }
             } catch {
                 self.error = error.localizedDescription
             }
             recording.isTranscribing = false
+        }
+    }
+
+    private func autoMatchSpeakers(audioURL: URL, utterances: [SpeakerUtterance]) {
+        let descriptor = FetchDescriptor<SpeakerProfile>()
+        guard let profiles = try? modelContext.fetch(descriptor), !profiles.isEmpty else { return }
+
+        Task {
+            let matches = voiceprintService.matchSpeakers(audioURL: audioURL, utterances: utterances, profiles: profiles)
+            for (speaker, match) in matches {
+                let speakerLabel = LanguageManager.shared.isEnglish ? "Speaker \(speaker)" : "说话人\(speaker)"
+                recording.speakerNames[speakerLabel] = match.profileName
+            }
         }
     }
 }

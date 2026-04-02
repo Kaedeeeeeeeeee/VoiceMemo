@@ -2,18 +2,25 @@ import SwiftUI
 
 struct MainTabView: View {
     @State private var selectedTab: AppTab = .home
+    @Binding var triggerRecord: Bool
 
     var body: some View {
         TabView(selection: $selectedTab) {
             Tab("录音", systemImage: "mic.fill", value: .home) {
                 NavigationStack {
-                    RecordingHomeView(switchToTab: { selectedTab = $0 })
+                    RecordingHomeView(switchToTab: { selectedTab = $0 }, triggerRecord: $triggerRecord)
                 }
             }
 
             Tab("历史", systemImage: "clock.fill", value: .history) {
                 NavigationStack {
                     RecordingHistoryView(switchToTab: { selectedTab = $0 })
+                }
+            }
+
+            Tab("知识库", systemImage: "book.closed.fill", value: .knowledgeBase) {
+                NavigationStack {
+                    KnowledgeBaseView()
                 }
             }
 
@@ -24,5 +31,10 @@ struct MainTabView: View {
             }
         }
         .tint(GlassTheme.accent)
+        .onChange(of: triggerRecord) {
+            if triggerRecord {
+                selectedTab = .home
+            }
+        }
     }
 }

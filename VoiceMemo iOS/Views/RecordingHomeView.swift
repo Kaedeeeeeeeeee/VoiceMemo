@@ -1,6 +1,7 @@
 import SwiftUI
 import SwiftData
 import UniformTypeIdentifiers
+import WidgetKit
 
 struct RecordingHomeView: View {
     @Environment(\.modelContext) private var modelContext
@@ -9,7 +10,16 @@ struct RecordingHomeView: View {
     @State private var showTemplateAlert = false
     @State private var amplitudeHistory: [CGFloat] = Array(repeating: 0, count: 50)
     @State private var animationPhase: CGFloat = 0
+    @State private var stopButtonProgress: CGFloat = 0
+    @State private var isLongPressingStop = false
+    @GestureState private var isPressingStop = false
+    @State private var pendingMarkers: [(timestamp: TimeInterval, text: String, photoFileName: String?)] = []
+    @State private var showAddMarker = false
+    @State private var markerTimestamp: TimeInterval = 0
     var switchToTab: (AppTab) -> Void
+    @Binding var triggerRecord: Bool
+
+    private let stopHoldDuration: CGFloat = 1.5
 
     var body: some View {
         ZStack {
@@ -77,30 +87,42 @@ struct RecordingHomeView: View {
                         }
                         .glassButton(circular: true, tint: .white)
 
-                        // Stop
-                        Button {
-                            Task {
-                                if let result = await recorder.stopRecording() {
-                                    saveRecording(url: result.url, duration: result.duration)
+                        // Stop (long press)
+                        LongPressStopButton(
+                            progress: stopButtonProgress,
+                            size: 72,
+                            tint: GlassTheme.accent
+                        )
+                        .gesture(
+                            DragGesture(minimumDistance: 0)
+                                .onChanged { _ in
+                                    if !isLongPressingStop {
+                                        isLongPressingStop = true
+                                        startStopHoldTimer()
+                                    }
                                 }
-                            }
-                        } label: {
-                            Image(systemName: "stop.fill")
-                                .font(.title2)
-                                .frame(width: 72, height: 72)
-                        }
-                        .glassButton(circular: true, tint: GlassTheme.accent)
+                                .onEnded { _ in
+                                    cancelStopHold()
+                                }
+                        )
 
-                        // Bookmark (placeholder)
-                        Button { } label: {
-                            Image(systemName: "star")
+                        // Bookmark
+                        Button {
+                            markerTimestamp = recorder.currentTime
+                            showAddMarker = true
+                        } label: {
+                            Image(systemName: pendingMarkers.isEmpty ? "bookmark" : "bookmark.fill")
                                 .font(.title3)
                                 .frame(width: 56, height: 56)
                         }
                         .glassButton(circular: true)
-                        .disabled(true)
                     }
-                    .padding(.bottom, 24)
+
+                    // Hint text
+                    Text("长按停止按钮结束录音")
+                        .font(.caption)
+                        .foregroundStyle(GlassTheme.textMuted)
+                        .padding(.bottom, 24)
                     }
                     .transition(.scale(scale: 0.05, anchor: .center).combined(with: .opacity))
                 } else {
@@ -234,10 +256,23 @@ struct RecordingHomeView: View {
         ) { result in
             handleImportedFile(result)
         }
+        .sheet(isPresented: $showAddMarker) {
+            AddMarkerSheet(timestamp: markerTimestamp) { text, photoFileName in
+                pendingMarkers.append((timestamp: markerTimestamp, text: text, photoFileName: photoFileName))
+            }
+        }
         .alert("即将上线", isPresented: $showTemplateAlert) {
             Button("好的") { }
         } message: {
             Text("笔记模板功能即将上线，敬请期待")
+        }
+        .onChange(of: triggerRecord) {
+            if triggerRecord && !recorder.isRecording {
+                triggerRecord = false
+                Task {
+                    _ = await recorder.startRecording()
+                }
+            }
         }
     }
 
@@ -251,6 +286,88 @@ struct RecordingHomeView: View {
             source: .phone
         )
         modelContext.insert(recording)
+
+        // Attach pending markers
+        for pending in pendingMarkers {
+            let marker = RecordingMarker(
+                timestamp: pending.timestamp,
+                text: pending.text,
+                photoFileName: pending.photoFileName
+            )
+            marker.recording = recording
+            modelContext.insert(marker)
+        }
+        pendingMarkers.removeAll()
+
+        // Auto-transcribe
+        AutoTranscriptionManager.shared.startTranscription(for: recording)
+
+        // Update shared UserDefaults for widgets
+        updateWidgetData()
+    }
+
+    private func updateWidgetData() {
+        guard let defaults = UserDefaults(suiteName: "group.com.zhangshifeng.VoiceMemo") else { return }
+
+        // Fetch recent recordings from model context
+        let descriptor = FetchDescriptor<Recording>(sortBy: [SortDescriptor(\Recording.date, order: .reverse)])
+        guard let recordings = try? modelContext.fetch(descriptor) else { return }
+
+        if let latest = recordings.first {
+            defaults.set(latest.title, forKey: "lastRecordingTitle")
+            defaults.set(latest.date.timeIntervalSince1970, forKey: "lastRecordingDate")
+        }
+
+        let recentItems = recordings.prefix(3).map { recording in
+            ["title": recording.title, "date": String(recording.date.timeIntervalSince1970)]
+        }
+        if let data = try? JSONEncoder().encode(recentItems),
+           let json = String(data: data, encoding: .utf8) {
+            defaults.set(json, forKey: "recentRecordingsJSON")
+        }
+
+        WidgetCenter.shared.reloadAllTimelines()
+    }
+
+    // MARK: - Long Press Stop
+
+    private func startStopHoldTimer() {
+        stopButtonProgress = 0
+        let startTime = Date()
+
+        // Light haptic at start
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+
+        Timer.scheduledTimer(withTimeInterval: 1.0 / 60.0, repeats: true) { timer in
+            let elapsed = Date().timeIntervalSince(startTime)
+            let progress = min(CGFloat(elapsed) / stopHoldDuration, 1.0)
+            stopButtonProgress = progress
+
+            if progress >= 1.0 {
+                timer.invalidate()
+                isLongPressingStop = false
+
+                // Strong haptic on complete
+                UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
+                UINotificationFeedbackGenerator().notificationOccurred(.success)
+
+                Task { @MainActor in
+                    if let result = await recorder.stopRecording() {
+                        saveRecording(url: result.url, duration: result.duration)
+                    }
+                    withAnimation(.easeOut(duration: 0.3)) {
+                        stopButtonProgress = 0
+                    }
+                }
+            }
+        }
+    }
+
+    private func cancelStopHold() {
+        isLongPressingStop = false
+        withAnimation(.easeOut(duration: 0.3)) {
+            stopButtonProgress = 0
+        }
     }
 
     private func handleImportedFile(_ result: Result<[URL], Error>) {
@@ -274,7 +391,9 @@ struct RecordingHomeView: View {
             )
             modelContext.insert(recording)
         } catch {
+            #if DEBUG
             print("Failed to import audio: \(error)")
+            #endif
         }
     }
 
@@ -339,3 +458,33 @@ struct RecordingHomeView: View {
     }
 }
 
+// MARK: - Long Press Stop Button
+
+private struct LongPressStopButton: View {
+    let progress: CGFloat
+    let size: CGFloat
+    let tint: Color
+
+    var body: some View {
+        ZStack {
+            // Background circle
+            Circle()
+                .fill(GlassTheme.surfaceMedium)
+                .frame(width: size, height: size)
+
+            // Progress ring
+            Circle()
+                .trim(from: 0, to: progress)
+                .stroke(tint, style: StrokeStyle(lineWidth: 4, lineCap: .round))
+                .frame(width: size + 8, height: size + 8)
+                .rotationEffect(.degrees(-90))
+                .animation(.linear(duration: 0.016), value: progress)
+
+            // Stop icon
+            Image(systemName: "stop.fill")
+                .font(.title2)
+                .foregroundStyle(.white)
+        }
+        .frame(width: size + 12, height: size + 12)
+    }
+}

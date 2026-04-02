@@ -87,12 +87,14 @@ struct GlassChip: View {
 enum AppTab: Int, CaseIterable {
     case home = 0
     case history = 1
-    case settings = 2
+    case knowledgeBase = 2
+    case settings = 3
 
     var icon: String {
         switch self {
         case .home: return "mic.fill"
         case .history: return "clock.fill"
+        case .knowledgeBase: return "book.closed.fill"
         case .settings: return "gearshape.fill"
         }
     }
@@ -101,6 +103,7 @@ enum AppTab: Int, CaseIterable {
         switch self {
         case .home: return "录音"
         case .history: return "历史"
+        case .knowledgeBase: return "知识库"
         case .settings: return "设置"
         }
     }

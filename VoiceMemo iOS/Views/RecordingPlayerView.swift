@@ -138,6 +138,12 @@ struct MiniPlayerBar: View {
             let url = documentsDir.appendingPathComponent(recording.fileURL)
             await player.load(url: url)
         }
+        .onReceive(NotificationCenter.default.publisher(for: .seekToTime)) { notification in
+            if let time = notification.userInfo?["time"] as? TimeInterval {
+                player.seek(to: time)
+                player.play()
+            }
+        }
     }
 
     private func formatTime(_ time: TimeInterval) -> String {
@@ -168,26 +174,48 @@ struct FullPlayerSheet: View {
             }
             .padding(.top, 16)
 
-            // Slider
+            // Slider with marker dots
             VStack(spacing: 4) {
-                Slider(
-                    value: Binding(
-                        get: { player.currentTime },
-                        set: { newValue in
-                            player.isSeeking = true
-                            player.currentTime = newValue
+                ZStack(alignment: .leading) {
+                    Slider(
+                        value: Binding(
+                            get: { player.currentTime },
+                            set: { newValue in
+                                player.isSeeking = true
+                                player.currentTime = newValue
+                            }
+                        ),
+                        in: 0...max(player.duration, 0.01),
+                        onEditingChanged: { editing in
+                            if !editing {
+                                player.seek(to: player.currentTime)
+                            } else {
+                                player.isSeeking = true
+                            }
                         }
-                    ),
-                    in: 0...max(player.duration, 0.01),
-                    onEditingChanged: { editing in
-                        if !editing {
-                            player.seek(to: player.currentTime)
-                        } else {
-                            player.isSeeking = true
+                    )
+                    .tint(GlassTheme.accent)
+
+                    // Marker dots overlay
+                    if player.duration > 0 {
+                        GeometryReader { geo in
+                            let sliderPadding: CGFloat = 16
+                            let trackWidth = geo.size.width - sliderPadding * 2
+                            ForEach(recording.sortedMarkers) { marker in
+                                let ratio = marker.timestamp / player.duration
+                                Circle()
+                                    .fill(Color.yellow)
+                                    .frame(width: 6, height: 6)
+                                    .position(
+                                        x: sliderPadding + trackWidth * CGFloat(ratio),
+                                        y: geo.size.height / 2
+                                    )
+                                    .allowsHitTesting(false)
+                            }
                         }
+                        .allowsHitTesting(false)
                     }
-                )
-                .tint(GlassTheme.accent)
+                }
 
                 HStack {
                     Text(formatTime(player.currentTime))
@@ -263,6 +291,12 @@ struct FullPlayerSheet: View {
             let documentsDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
             let url = documentsDir.appendingPathComponent(recording.fileURL)
             await player.load(url: url)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .seekToTime)) { notification in
+            if let time = notification.userInfo?["time"] as? TimeInterval {
+                player.seek(to: time)
+                player.play()
+            }
         }
     }
 

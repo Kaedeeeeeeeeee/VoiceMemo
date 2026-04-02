@@ -1,40 +1,29 @@
 import SwiftUI
 import SwiftData
 
-struct ChatMessage: Identifiable {
-    let id = UUID()
-    let role: Role
-    let content: String
-    let timestamp = Date()
-
-    enum Role {
-        case user
-        case assistant
-    }
-}
-
-enum ConversationViewState: Equatable {
-    case list
-    case active
-}
-
-struct AIConversationView: View {
-    let recording: Recording
+struct KnowledgeBaseView: View {
     @Environment(\.modelContext) private var modelContext
+    @Query(sort: \Recording.date, order: .reverse) private var allRecordings: [Recording]
     @State private var aiService = AIService()
+    @State private var searchService = KnowledgeBaseSearchService()
     @State private var messages: [ChatMessage] = []
     @State private var inputText = ""
     @State private var isLoading = false
     @State private var viewState: ConversationViewState = .list
     @State private var conversations: [ChatConversation] = []
     @State private var activeConversation: ChatConversation?
+    @State private var lastSourceResults: [SearchResult] = []
     @FocusState private var isInputFocused: Bool
     @State private var showPaywall = false
 
+    private var transcribedRecordings: [Recording] {
+        allRecordings.filter { $0.transcription != nil && !($0.transcription?.isEmpty ?? true) }
+    }
+
     var body: some View {
         VStack(spacing: 0) {
-            if recording.transcription == nil {
-                noTranscriptionView
+            if transcribedRecordings.isEmpty {
+                emptyStateView
             } else {
                 switch viewState {
                 case .list:
@@ -46,18 +35,19 @@ struct AIConversationView: View {
                 case .active:
                     activeConversationView
                 }
-            }
 
-            // Input bar (only in active state or list with no transcription guard above)
-            if recording.transcription != nil {
-                if case .active = viewState {
-                    inputBar
-                } else if conversations.isEmpty {
-                    inputBar
+                if !transcribedRecordings.isEmpty {
+                    if case .active = viewState {
+                        inputBar
+                    } else if conversations.isEmpty {
+                        inputBar
+                    }
                 }
             }
         }
-        .background(Color.clear)
+        .background(RadialBackgroundView())
+        .navigationTitle("知识库")
+        .navigationBarTitleDisplayMode(.inline)
         .sheet(isPresented: $showPaywall) {
             PaywallView()
         }
@@ -68,15 +58,15 @@ struct AIConversationView: View {
 
     // MARK: - Subviews
 
-    private var noTranscriptionView: some View {
+    private var emptyStateView: some View {
         VStack(spacing: 16) {
-            Image(systemName: "text.badge.xmark")
+            Image(systemName: "book.closed")
                 .font(.system(size: 40))
                 .foregroundStyle(GlassTheme.textMuted)
-            Text("请先完成语音转写")
+            Text("知识库为空")
                 .font(.headline)
                 .foregroundStyle(GlassTheme.textSecondary)
-            Text("AI 对话需要基于转写文本")
+            Text("完成录音转写后即可跨录音提问")
                 .font(.subheadline)
                 .foregroundStyle(GlassTheme.textTertiary)
         }
@@ -151,7 +141,6 @@ struct AIConversationView: View {
 
     private var activeConversationView: some View {
         VStack(spacing: 0) {
-            // Back button
             HStack {
                 Button {
                     returnToList()
@@ -178,7 +167,7 @@ struct AIConversationView: View {
 
     private var inputBar: some View {
         HStack(alignment: .bottom, spacing: 10) {
-            TextField("针对录音内容提问...", text: $inputText, axis: .vertical)
+            TextField("跨录音提问...", text: $inputText, axis: .vertical)
                 .focused($isInputFocused)
                 .lineLimit(1...5)
                 .padding(.horizontal, 16)
@@ -208,20 +197,20 @@ struct AIConversationView: View {
     private var suggestionsView: some View {
         ScrollView {
             VStack(spacing: 16) {
-                Image(systemName: "bubble.left.and.bubble.right")
+                Image(systemName: "book.closed.fill")
                     .font(.system(size: 36))
                     .foregroundStyle(GlassTheme.textMuted)
                     .padding(.top, 24)
 
-                Text("针对录音内容提问")
+                Text("跨录音智能问答")
                     .font(.subheadline)
                     .foregroundStyle(GlassTheme.textTertiary)
 
                 let suggestions = [
-                    String(localized: "这段录音的主要内容是什么？"),
-                    String(localized: "有哪些重要的决定或结论？"),
-                    String(localized: "总结一下讨论的要点"),
-                    String(localized: "有没有提到截止日期？")
+                    String(localized: "我最近的录音都讨论了什么？"),
+                    String(localized: "帮我总结过去一周的要点"),
+                    String(localized: "有没有提到需要跟进的事项？"),
+                    String(localized: "最近的会议有哪些决定？")
                 ]
 
                 VStack(spacing: 10) {
@@ -249,9 +238,19 @@ struct AIConversationView: View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(spacing: 12) {
-                    ForEach(messages) { message in
-                        GlassMessageBubble(message: message)
-                            .id(message.id)
+                    ForEach(Array(messages.enumerated()), id: \.element.id) { index, message in
+                        VStack(spacing: 6) {
+                            GlassMessageBubble(message: message)
+                                .id(message.id)
+
+                            // Show source cards after assistant messages
+                            if message.role == .assistant {
+                                let sources = sourcesForMessage(at: index)
+                                if !sources.isEmpty {
+                                    sourceCardsView(for: sources)
+                                }
+                            }
+                        }
                     }
 
                     if isLoading {
@@ -275,12 +274,39 @@ struct AIConversationView: View {
         }
     }
 
+    private func sourceCardsView(for sources: [SearchResult]) -> some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(sources) { result in
+                    NavigationLink {
+                        RecordingDetailView(recording: result.recording)
+                    } label: {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(result.recording.title)
+                                .font(.caption)
+                                .fontWeight(.medium)
+                                .foregroundStyle(GlassTheme.textPrimary)
+                                .lineLimit(1)
+                            Text(result.recording.date.formatted(.dateTime.month().day()))
+                                .font(.caption2)
+                                .foregroundStyle(GlassTheme.textTertiary)
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                    }
+                    .glassCard(radius: 8)
+                }
+            }
+            .padding(.horizontal)
+        }
+    }
+
     // MARK: - Actions
 
     private func loadConversations() {
-        let recordingID: UUID? = recording.id
+        let nilUUID: UUID? = nil
         var descriptor = FetchDescriptor<ChatConversation>(
-            predicate: #Predicate { $0.recordingID == recordingID },
+            predicate: #Predicate { $0.recordingID == nilUUID },
             sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]
         )
         descriptor.fetchLimit = 50
@@ -290,12 +316,14 @@ struct AIConversationView: View {
     private func startNewConversation() {
         activeConversation = nil
         messages = []
+        lastSourceResults = []
         viewState = .active
     }
 
     private func createNewConversation(initialMessage: String?) {
         activeConversation = nil
         messages = []
+        lastSourceResults = []
         viewState = .active
 
         if let text = initialMessage {
@@ -309,12 +337,14 @@ struct AIConversationView: View {
         messages = conversation.messages
             .sorted { $0.timestamp < $1.timestamp }
             .map { ChatMessage(role: $0.role == "user" ? .user : .assistant, content: $0.content) }
+        lastSourceResults = []
         viewState = .active
     }
 
     private func returnToList() {
         messages = []
         activeConversation = nil
+        lastSourceResults = []
         viewState = .list
         loadConversations()
     }
@@ -329,23 +359,46 @@ struct AIConversationView: View {
         if let existing = activeConversation {
             return existing
         }
-        let conversation = ChatConversation(recordingID: recording.id)
+        let conversation = ChatConversation(recordingID: nil)
         modelContext.insert(conversation)
         activeConversation = conversation
         viewState = .active
         return conversation
     }
 
+    private func sourcesForMessage(at index: Int) -> [SearchResult] {
+        // Show sources for the last assistant message only
+        if index == messages.count - 1 && messages[index].role == .assistant {
+            return lastSourceResults
+        }
+
+        // For persisted conversations, look up source recording IDs
+        if let conversation = activeConversation {
+            let sortedPersisted = conversation.messages.sorted { $0.timestamp < $1.timestamp }
+            if index < sortedPersisted.count {
+                let persisted = sortedPersisted[index]
+                if !persisted.sourceRecordingIDs.isEmpty {
+                    return persisted.sourceRecordingIDs.compactMap { sourceID in
+                        allRecordings.first { $0.id == sourceID }.map { recording in
+                            SearchResult(id: recording.id, recording: recording, score: 0, excerpts: [])
+                        }
+                    }
+                }
+            }
+        }
+
+        return []
+    }
+
     private func sendMessage() {
         let text = inputText.trimmingCharacters(in: .whitespaces)
-        guard !text.isEmpty, let transcription = recording.transcription else { return }
+        guard !text.isEmpty else { return }
 
-        guard TrialManager.shared.claimTrialIfNeeded(for: recording) else {
+        guard TrialManager.shared.claimTrialIfNeeded() else {
             showPaywall = true
             return
         }
 
-        // If we're in list state (suggestions visible, no history), enter active state first
         if case .list = viewState {
             createNewConversation(initialMessage: text)
             return
@@ -356,8 +409,8 @@ struct AIConversationView: View {
         isInputFocused = false
         inputText = ""
         isLoading = true
+        lastSourceResults = []
 
-        // Persist user message — create conversation on demand
         let conversation = ensureConversation()
         let persistedMsg = PersistedChatMessage(role: "user", content: text)
         persistedMsg.conversation = conversation
@@ -370,6 +423,14 @@ struct AIConversationView: View {
 
         Task {
             do {
+                // Search across all recordings (semantic + keyword fallback)
+                let results = try await searchService.semanticSearch(query: text, in: transcribedRecordings, context: modelContext)
+                let context = searchService.buildContext(from: results)
+
+                await MainActor.run {
+                    lastSourceResults = results
+                }
+
                 let conversationHistory = messages.map { msg in
                     AIService.ConversationMessage(
                         role: msg.role == .user ? "user" : "assistant",
@@ -377,16 +438,21 @@ struct AIConversationView: View {
                     )
                 }
 
-                let response = try await aiService.chat(
-                    transcription: transcription,
+                let response = try await aiService.knowledgeBaseChat(
+                    context: context,
                     messages: conversationHistory
                 )
                 let assistantMessage = ChatMessage(role: .assistant, content: response)
                 messages.append(assistantMessage)
 
-                // Persist assistant message
+                // Persist assistant message with source IDs
                 if let conversation = activeConversation {
-                    let persistedMsg = PersistedChatMessage(role: "assistant", content: response)
+                    let sourceIDs = results.map { $0.recording.id }
+                    let persistedMsg = PersistedChatMessage(
+                        role: "assistant",
+                        content: response,
+                        sourceRecordingIDs: sourceIDs
+                    )
                     persistedMsg.conversation = conversation
                     modelContext.insert(persistedMsg)
                     conversation.updatedAt = .now
@@ -398,27 +464,5 @@ struct AIConversationView: View {
             }
             isLoading = false
         }
-    }
-}
-
-struct GlassMessageBubble: View {
-    let message: ChatMessage
-
-    var body: some View {
-        HStack {
-            if message.role == .user { Spacer(minLength: 60) }
-
-            Text(message.content)
-                .font(.body)
-                .padding(12)
-                .foregroundStyle(GlassTheme.textPrimary)
-                .adaptiveGlassEffect(
-                    tint: message.role == .user ? GlassTheme.accent : nil,
-                    in: RoundedRectangle(cornerRadius: 16)
-                )
-
-            if message.role == .assistant { Spacer(minLength: 60) }
-        }
-        .padding(.horizontal)
     }
 }
