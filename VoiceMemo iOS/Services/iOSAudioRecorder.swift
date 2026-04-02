@@ -1,3 +1,4 @@
+import ActivityKit
 import AVFoundation
 import Observation
 
@@ -13,6 +14,9 @@ final class iOSAudioRecorder: NSObject {
     private var recordingURL: URL?
     private var recordedFrames: AVAudioFrameCount = 0
     private var recordingSampleRate: Double = 44100.0
+
+    private var currentActivity: Activity<RecordingActivityAttributes>?
+    private var accumulatedTimeBeforePause: TimeInterval = 0
 
     override init() {
         super.init()
@@ -36,7 +40,9 @@ final class iOSAudioRecorder: NSObject {
                 try session.setActive(true)
                 return true
             } catch {
+                #if DEBUG
                 print("Failed to start recording setup: \(error)")
+                #endif
                 return false
             }
         }.value
@@ -49,16 +55,18 @@ final class iOSAudioRecorder: NSObject {
         do {
             let engine = AVAudioEngine()
             let inputNode = engine.inputNode
-            
+
             do {
                 try inputNode.setVoiceProcessingEnabled(true)
             } catch {
+                #if DEBUG
                 print("Failed to enable voice processing: \(error)")
+                #endif
             }
 
             let inputFormat = inputNode.inputFormat(forBus: 0)
             self.recordingSampleRate = inputFormat.sampleRate > 0 ? inputFormat.sampleRate : 44100.0
-            
+
             let settings: [String: Any] = [
                 AVFormatIDKey: Int(kAudioFormatMPEG4AAC),
                 AVSampleRateKey: 44100.0,
@@ -66,34 +74,40 @@ final class iOSAudioRecorder: NSObject {
                 AVEncoderAudioQualityKey: AVAudioQuality.high.rawValue,
                 AVEncoderBitRateKey: 128000
             ]
-            
+
             audioFile = try AVAudioFile(forWriting: url, settings: settings, commonFormat: .pcmFormatFloat32, interleaved: false)
-            
+
             inputNode.installTap(onBus: 0, bufferSize: 4096, format: inputFormat) { [weak self] buffer, time in
                 guard let self = self, let file = self.audioFile else { return }
-                
+
                 if self.isPaused { return }
-                
+
                 do {
                     try file.write(from: buffer)
-                    
+
                     Task { @MainActor in
                         self.recordedFrames += buffer.frameLength
                         self.currentTime = Double(self.recordedFrames) / self.recordingSampleRate
                         self.updateMeters(buffer: buffer)
                     }
                 } catch {
+                    #if DEBUG
                     print("Error writing audio buffer: \(error)")
+                    #endif
                 }
             }
 
             engine.prepare()
             try engine.start()
-            
+
             audioEngine = engine
+            accumulatedTimeBeforePause = 0
+            startLiveActivity()
             return url
         } catch {
+            #if DEBUG
             print("Failed to start engine: \(error)")
+            #endif
             isRecording = false
             return nil
         }
@@ -104,15 +118,16 @@ final class iOSAudioRecorder: NSObject {
         guard let engine = audioEngine, let url = recordingURL else { return nil }
 
         let duration = self.currentTime
-        
+
         engine.inputNode.removeTap(onBus: 0)
         engine.stop()
         audioFile = nil
-        
+
         isRecording = false
         isPaused = false
         currentTime = 0
         averagePower = 0
+        endLiveActivity()
 
         audioEngine = nil
         recordingURL = nil
@@ -122,7 +137,9 @@ final class iOSAudioRecorder: NSObject {
             do {
                 try AVAudioSession.sharedInstance().setActive(false)
             } catch {
+                #if DEBUG
                 print("Failed to deactivate audio session: \(error)")
+                #endif
             }
         }.value
 
@@ -131,32 +148,80 @@ final class iOSAudioRecorder: NSObject {
 
     func pauseRecording() {
         isPaused = true
+        accumulatedTimeBeforePause = currentTime
+        updateLiveActivity(isPaused: true)
     }
 
     func resumeRecording() {
         isPaused = false
+        updateLiveActivity(isPaused: false)
     }
 
     @MainActor
     private func updateMeters(buffer: AVAudioPCMBuffer) {
         guard let channelData = buffer.floatChannelData?[0] else { return }
         let frameLength = Int(buffer.frameLength)
-        
+
         var rms: Float = 0
         for i in 0..<frameLength {
             let sample = channelData[i]
             rms += sample * sample
         }
         rms = sqrt(rms / Float(frameLength))
-        
+
         let minDb: Float = -80.0
         var db = 20 * log10(rms)
         if db < minDb || db.isNaN {
             db = minDb
         }
-        
+
         let alpha: Float = 0.2
         self.averagePower = (alpha * db) + ((1.0 - alpha) * self.averagePower)
+    }
+
+    // MARK: - Live Activity
+
+    private func startLiveActivity() {
+        guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
+        let attributes = RecordingActivityAttributes()
+        let state = RecordingActivityAttributes.ContentState(
+            isPaused: false,
+            timerStartDate: .now,
+            frozenElapsed: 0
+        )
+        do {
+            currentActivity = try Activity.request(
+                attributes: attributes,
+                content: .init(state: state, staleDate: nil)
+            )
+        } catch {
+            #if DEBUG
+            print("Failed to start Live Activity: \(error)")
+            #endif
+        }
+    }
+
+    private func updateLiveActivity(isPaused: Bool) {
+        let state = RecordingActivityAttributes.ContentState(
+            isPaused: isPaused,
+            timerStartDate: isPaused ? .now : .now.addingTimeInterval(-accumulatedTimeBeforePause),
+            frozenElapsed: isPaused ? accumulatedTimeBeforePause : 0
+        )
+        Task {
+            await currentActivity?.update(.init(state: state, staleDate: nil))
+        }
+    }
+
+    private func endLiveActivity() {
+        let state = RecordingActivityAttributes.ContentState(
+            isPaused: true,
+            timerStartDate: .now,
+            frozenElapsed: accumulatedTimeBeforePause
+        )
+        Task {
+            await currentActivity?.end(.init(state: state, staleDate: nil), dismissalPolicy: .immediate)
+            currentActivity = nil
+        }
     }
 
     static func newRecordingURL() -> URL {
