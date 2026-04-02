@@ -6,127 +6,112 @@ import Observation
 final class TrialManager {
     static let shared = TrialManager()
 
-    private(set) var trialRecordingID: UUID?
+    private(set) var monthlyAIUsageCount: Int = 0
+    private(set) var currentMonth: String = ""
 
-    private static let userDefaultsKey = "trialRecordingID"
+    private static let usageCountKey = "monthlyAIUsageCount"
+    private static let currentMonthKey = "monthlyAICurrentMonth"
+    private static let maxFreeAIPerMonth = 3
+
+    // Legacy keys for migration
+    private static let legacyUserDefaultsKey = "trialRecordingID"
     private static let keychainService = "com.podnote.trial"
     private static let keychainAccount = "trialRecordingID"
 
     private init() {
-        trialRecordingID = loadTrialID()
+        resetIfNewMonth()
     }
 
     // MARK: - Public API
 
-    /// Whether the user can access AI features for the given recording.
-    /// Returns true if subscribed, or if this is the trial recording.
+    /// Whether the user can access AI features.
+    /// Returns true if subscribed, or if monthly free AI uses haven't been exhausted.
     func canAccessAI(for recording: Recording) -> Bool {
         if SubscriptionManager.shared.isSubscribed { return true }
-        if let trialID = trialRecordingID, trialID == recording.id { return true }
-        return false
+        resetIfNewMonth()
+        return monthlyAIUsageCount < Self.maxFreeAIPerMonth
     }
 
-    /// Attempts to claim the trial for this recording.
-    /// Returns true if AI access is granted (subscribed or trial claimed).
-    /// Returns false if trial was already claimed for another recording.
-    func claimTrialIfNeeded(for recording: Recording) -> Bool {
+    /// Attempts to use a free AI credit.
+    /// Returns true if AI access is granted (subscribed or free uses remaining).
+    /// Returns false if free uses exhausted — caller should show paywall.
+    func claimTrialIfNeeded() -> Bool {
         if SubscriptionManager.shared.isSubscribed { return true }
+        resetIfNewMonth()
 
-        // Already the trial recording
-        if let trialID = trialRecordingID, trialID == recording.id { return true }
-
-        // Trial not yet claimed — claim it
-        if trialRecordingID == nil {
-            trialRecordingID = recording.id
-            saveTrialID(recording.id)
+        if monthlyAIUsageCount < Self.maxFreeAIPerMonth {
+            monthlyAIUsageCount += 1
+            saveUsage()
             return true
         }
 
-        // Trial already claimed for a different recording
         return false
     }
 
-    /// Whether the given recording is the trial recording.
-    func isTrialRecording(_ recording: Recording) -> Bool {
-        trialRecordingID == recording.id
+    /// Attempts to use a free AI credit for this recording.
+    /// Returns true if AI access is granted (subscribed or free uses remaining).
+    /// Returns false if free uses exhausted — caller should show paywall.
+    func claimTrialIfNeeded(for recording: Recording) -> Bool {
+        if SubscriptionManager.shared.isSubscribed { return true }
+        resetIfNewMonth()
+
+        if monthlyAIUsageCount < Self.maxFreeAIPerMonth {
+            monthlyAIUsageCount += 1
+            saveUsage()
+            return true
+        }
+
+        return false
     }
 
-    /// Whether any trial has been claimed.
+    /// Number of free AI uses remaining this month.
+    var remainingFreeUses: Int {
+        resetIfNewMonth()
+        return max(0, Self.maxFreeAIPerMonth - monthlyAIUsageCount)
+    }
+
+    /// Whether any trial has been claimed (for backward compat with UI).
     var isTrialClaimed: Bool {
-        trialRecordingID != nil
+        monthlyAIUsageCount > 0
+    }
+
+    /// Whether the given recording is a trial recording (always false in new model).
+    func isTrialRecording(_ recording: Recording) -> Bool {
+        false
+    }
+
+    // MARK: - Month Reset
+
+    private func resetIfNewMonth() {
+        let thisMonth = Self.monthKey()
+        if currentMonth != thisMonth {
+            currentMonth = thisMonth
+            monthlyAIUsageCount = 0
+            saveUsage()
+        } else {
+            loadUsage()
+        }
+    }
+
+    private static func monthKey() -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM"
+        return formatter.string(from: Date())
     }
 
     // MARK: - Persistence
 
-    private func loadTrialID() -> UUID? {
-        // Prefer Keychain (survives uninstall)
-        if let keychainValue = loadFromKeychain() {
-            // Sync to UserDefaults if missing
-            if UserDefaults.standard.string(forKey: Self.userDefaultsKey) == nil {
-                UserDefaults.standard.set(keychainValue.uuidString, forKey: Self.userDefaultsKey)
-            }
-            return keychainValue
+    private func loadUsage() {
+        let savedMonth = UserDefaults.standard.string(forKey: Self.currentMonthKey) ?? ""
+        if savedMonth == currentMonth {
+            monthlyAIUsageCount = UserDefaults.standard.integer(forKey: Self.usageCountKey)
+        } else {
+            monthlyAIUsageCount = 0
         }
-
-        // Fallback to UserDefaults
-        if let stored = UserDefaults.standard.string(forKey: Self.userDefaultsKey),
-           let uuid = UUID(uuidString: stored) {
-            // Sync to Keychain
-            saveToKeychain(uuid)
-            return uuid
-        }
-
-        return nil
     }
 
-    private func saveTrialID(_ id: UUID) {
-        UserDefaults.standard.set(id.uuidString, forKey: Self.userDefaultsKey)
-        saveToKeychain(id)
-    }
-
-    // MARK: - Keychain
-
-    private func saveToKeychain(_ id: UUID) {
-        let data = id.uuidString.data(using: .utf8)!
-
-        // Delete existing
-        let deleteQuery: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: Self.keychainService,
-            kSecAttrAccount as String: Self.keychainAccount
-        ]
-        SecItemDelete(deleteQuery as CFDictionary)
-
-        // Add new
-        let addQuery: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: Self.keychainService,
-            kSecAttrAccount as String: Self.keychainAccount,
-            kSecValueData as String: data,
-            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock
-        ]
-        SecItemAdd(addQuery as CFDictionary, nil)
-    }
-
-    private func loadFromKeychain() -> UUID? {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: Self.keychainService,
-            kSecAttrAccount as String: Self.keychainAccount,
-            kSecReturnData as String: true,
-            kSecMatchLimit as String: kSecMatchLimitOne
-        ]
-
-        var result: AnyObject?
-        let status = SecItemCopyMatching(query as CFDictionary, &result)
-
-        guard status == errSecSuccess,
-              let data = result as? Data,
-              let string = String(data: data, encoding: .utf8),
-              let uuid = UUID(uuidString: string) else {
-            return nil
-        }
-
-        return uuid
+    private func saveUsage() {
+        UserDefaults.standard.set(currentMonth, forKey: Self.currentMonthKey)
+        UserDefaults.standard.set(monthlyAIUsageCount, forKey: Self.usageCountKey)
     }
 }

@@ -8,8 +8,8 @@
 
 /* Begin PBXBuildFile section */
 		AABB00142F51B7000011BE60 /* VoiceMemo Watch WidgetExtension.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = AABB00052F51B7000011BE60 /* VoiceMemo Watch WidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
-		CED10E5B2F51B6D00011BE60 /* VoiceMemo Watch App.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = CED10E5A2F51B6D00011BE60 /* VoiceMemo Watch App.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		AABB00182F51B7000011BE60 /* VoiceMemo Watch App.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = CED10E5A2F51B6D00011BE60 /* VoiceMemo Watch App.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		CED10E5B2F51B6D00011BE60 /* VoiceMemo Watch App.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = CED10E5A2F51B6D00011BE60 /* VoiceMemo Watch App.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -19,6 +19,13 @@
 			proxyType = 1;
 			remoteGlobalIDString = AABB00072F51B7000011BE60;
 			remoteInfo = "VoiceMemo Watch WidgetExtension";
+		};
+		AABB001A2F51B7000011BE60 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = CED10E4E2F51B6CF0011BE60 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = CED10E592F51B6D00011BE60;
+			remoteInfo = "VoiceMemo Watch App";
 		};
 		CED10E5C2F51B6D00011BE60 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -41,13 +48,6 @@
 			remoteGlobalIDString = CED10E592F51B6D00011BE60;
 			remoteInfo = "VoiceMemo Watch App";
 		};
-		AABB001A2F51B7000011BE60 /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = CED10E4E2F51B6CF0011BE60 /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = CED10E592F51B6D00011BE60;
-			remoteInfo = "VoiceMemo Watch App";
-		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -62,17 +62,6 @@
 			name = "Embed App Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		CED10E802F51B6D20011BE60 /* Embed Watch Content */ = {
-			isa = PBXCopyFilesBuildPhase;
-			buildActionMask = 2147483647;
-			dstPath = "$(CONTENTS_FOLDER_PATH)/Watch";
-			dstSubfolderSpec = 16;
-			files = (
-				CED10E5B2F51B6D00011BE60 /* VoiceMemo Watch App.app in Embed Watch Content */,
-			);
-			name = "Embed Watch Content";
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 		AABB00192F51B7000011BE60 /* Embed Watch Content */ = {
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 2147483647;
@@ -80,6 +69,17 @@
 			dstSubfolderSpec = 16;
 			files = (
 				AABB00182F51B7000011BE60 /* VoiceMemo Watch App.app in Embed Watch Content */,
+			);
+			name = "Embed Watch Content";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		CED10E802F51B6D20011BE60 /* Embed Watch Content */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "$(CONTENTS_FOLDER_PATH)/Watch";
+			dstSubfolderSpec = 16;
+			files = (
+				CED10E5B2F51B6D00011BE60 /* VoiceMemo Watch App.app in Embed Watch Content */,
 			);
 			name = "Embed Watch Content";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -122,26 +122,47 @@
 		DDEE00042F51B7000011BE60 /* Exceptions for "VoiceMemo iOS" folder in "VoiceMemo macOS" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
-				VoiceMemoiOSApp.swift,
+				AppIntents/RecordingIntents.swift,
+				AppIntents/VoiceMemoShortcuts.swift,
 				Configuration.storekit,
-				"Services/iOSAudioRecorder.swift",
-				"Services/PhoneConnectivityService.swift",
-				"Services/PDFRenderer.swift",
-				"Views/MainTabView.swift",
-				"Views/RecordingHomeView.swift",
-				"Views/RecordingListView.swift",
-				"Views/RecordingDetailView.swift",
-				"Views/TranscriptView.swift",
-				"Views/SummaryView.swift",
-				"Views/AIConversationView.swift",
-				"Views/RecordingPlayerView.swift",
-				"Views/PaywallView.swift",
-				"Views/SettingsView.swift",
-				"Views/SpeakerRenameSheet.swift",
-				"Views/PrivacyPolicyView.swift",
-				"Views/TermsOfServiceView.swift",
-				"Views/Theme/GlassTheme.swift",
-				"Views/Theme/GlassComponents.swift",
+				Services/AutoTranscriptionManager.swift,
+				Services/CallObserverService.swift,
+				Services/EmbeddingService.swift,
+				Services/ExportService.swift,
+				Services/GoogleDocsService.swift,
+				Services/IntegrationService.swift,
+				Services/iOSAudioRecorder.swift,
+				Services/KnowledgeBaseSearchService.swift,
+				Services/NotionService.swift,
+				Services/PDFRenderer.swift,
+				Services/PhoneConnectivityService.swift,
+				Services/ShareCardRenderer.swift,
+				Services/SpeakerSegment.swift,
+				Services/VoiceprintService.swift,
+				Views/AddMarkerSheet.swift,
+				Views/AIConversationView.swift,
+				Views/CustomTemplateEditorView.swift,
+				Views/IntegrationSettingsView.swift,
+				Views/KnowledgeBaseView.swift,
+				Views/MainTabView.swift,
+				Views/MarkerListView.swift,
+				Views/PaywallView.swift,
+				Views/PrivacyPolicyView.swift,
+				Views/RecordingDetailView.swift,
+				Views/RecordingHomeView.swift,
+				Views/RecordingListView.swift,
+				Views/RecordingPlayerView.swift,
+				Views/SettingsView.swift,
+				Views/SpeakerProfilesView.swift,
+				Views/SpeakerRenameSheet.swift,
+				Views/SummaryView.swift,
+				Views/TermsOfServiceView.swift,
+				Views/Theme/GlassComponents.swift,
+				Views/Theme/GlassTheme.swift,
+				Views/TimestampTextView.swift,
+				Views/TranscriptView.swift,
+				Views/VoiceprintEnrollSheet.swift,
+				VoiceMemoiOSApp.swift,
 			);
 			target = DDEE00082F51B7000011BE60 /* VoiceMemo macOS */;
 		};
@@ -166,11 +187,6 @@
 			path = "VoiceMemo iOS";
 			sourceTree = "<group>";
 		};
-		DDEE00022F51B7000011BE60 /* VoiceMemo macOS */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = "VoiceMemo macOS";
-			sourceTree = "<group>";
-		};
 		AABB00032F51B7000011BE60 /* VoiceMemo Watch Widget */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = "VoiceMemo Watch Widget";
@@ -189,6 +205,11 @@
 		CED10E762F51B6D20011BE60 /* VoiceMemo Watch AppUITests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = "VoiceMemo Watch AppUITests";
+			sourceTree = "<group>";
+		};
+		DDEE00022F51B7000011BE60 /* VoiceMemo macOS */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = "VoiceMemo macOS";
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -472,6 +493,7 @@
 			knownRegions = (
 				en,
 				Base,
+				ja,
 			);
 			mainGroup = CED10E4D2F51B6CF0011BE60;
 			minimizedProjectReferenceProxies = 1;
@@ -589,15 +611,15 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
-		AABB001B2F51B7000011BE60 /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			target = CED10E592F51B6D00011BE60 /* VoiceMemo Watch App */;
-			targetProxy = AABB001A2F51B7000011BE60 /* PBXContainerItemProxy */;
-		};
 		AABB00172F51B7000011BE60 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = AABB00072F51B7000011BE60 /* VoiceMemo Watch WidgetExtension */;
 			targetProxy = AABB00162F51B7000011BE60 /* PBXContainerItemProxy */;
+		};
+		AABB001B2F51B7000011BE60 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = CED10E592F51B6D00011BE60 /* VoiceMemo Watch App */;
+			targetProxy = AABB001A2F51B7000011BE60 /* PBXContainerItemProxy */;
 		};
 		CED10E5D2F51B6D00011BE60 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
@@ -622,11 +644,13 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = "VoiceMemo iOS/VoiceMemo_iOS.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = Y4FV6WUU4V;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "VoiceMemo-iOS-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = PodNote;
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "VoiceMemo needs microphone access to record audio.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -658,11 +682,13 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = "VoiceMemo iOS/VoiceMemo_iOS.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = Y4FV6WUU4V;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "VoiceMemo-iOS-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = PodNote;
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "VoiceMemo needs microphone access to record audio.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -694,6 +720,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = "VoiceMemo Watch Widget/VoiceMemo_WatchWidget.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = Y4FV6WUU4V;
@@ -725,6 +752,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = "VoiceMemo Watch Widget/VoiceMemo_WatchWidget.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = Y4FV6WUU4V;
@@ -874,6 +902,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = "VoiceMemo Watch App/VoiceMemo_WatchApp.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = Y4FV6WUU4V;
@@ -908,6 +937,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = "VoiceMemo Watch App/VoiceMemo_WatchApp.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = Y4FV6WUU4V;

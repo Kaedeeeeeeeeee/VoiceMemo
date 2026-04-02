@@ -1,5 +1,5 @@
 {
-  "identifier" : "com.podnote.pro",
+  "identifier" : "com.zhangshifeng.VoiceMemo",
   "nonRenewingSubscriptions" : [
 
   ],
@@ -10,8 +10,8 @@
     "_applicationInternalID" : "1234567890",
     "_developerTeamID" : "XXXXXXXXXX",
     "_failTransactionsEnabled" : false,
-    "_locale" : "zh_CN",
-    "_storefront" : "CHN",
+    "_locale" : "en_US",
+    "_storefront" : "USA",
     "_storeKitErrors" : [
       {
         "current" : null,
@@ -68,6 +68,11 @@
           "description" : "解锁全部 AI 功能",
           "displayName" : "PodNote Pro",
           "locale" : "zh_CN"
+        },
+        {
+          "description" : "Unlock all AI features",
+          "displayName" : "PodNote Pro",
+          "locale" : "en_US"
         }
       ],
       "name" : "PodNote Pro",
@@ -79,7 +84,7 @@
           "codeOffers" : [
 
           ],
-          "displayPrice" : "38.00",
+          "displayPrice" : "4.99",
           "familyShareable" : false,
           "groupNumber" : 1,
           "internalID" : "21000000000002",
@@ -89,9 +94,14 @@
               "description" : "每月自动续费，可随时取消",
               "displayName" : "月度订阅",
               "locale" : "zh_CN"
+            },
+            {
+              "description" : "Auto-renews monthly, cancel anytime",
+              "displayName" : "Monthly",
+              "locale" : "en_US"
             }
           ],
-          "productID" : "com.podnote.pro.monthly",
+          "productID" : "com.zhangshifeng.VoiceMemo.monthly",
           "recurringSubscriptionPeriod" : "P1M",
           "referenceName" : "Monthly",
           "subscriptionGroupID" : "21000000000001",
@@ -107,7 +117,7 @@
           "codeOffers" : [
 
           ],
-          "displayPrice" : "168.00",
+          "displayPrice" : "39.99",
           "familyShareable" : false,
           "groupNumber" : 1,
           "internalID" : "21000000000003",
@@ -117,9 +127,14 @@
               "description" : "每年自动续费，可随时取消",
               "displayName" : "年度订阅",
               "locale" : "zh_CN"
+            },
+            {
+              "description" : "Auto-renews yearly, cancel anytime",
+              "displayName" : "Yearly",
+              "locale" : "en_US"
             }
           ],
-          "productID" : "com.podnote.pro.yearly",
+          "productID" : "com.zhangshifeng.VoiceMemo.yearly",
           "recurringSubscriptionPeriod" : "P1Y",
           "referenceName" : "Yearly",
           "subscriptionGroupID" : "21000000000001",

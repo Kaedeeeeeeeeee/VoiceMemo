@@ -11,8 +11,8 @@ final class SubscriptionManager {
     private(set) var isPurchasing = false
 
     private static let productIDs: Set<String> = [
-        "com.podnote.pro.monthly",
-        "com.podnote.pro.yearly"
+        "com.zhangshifeng.VoiceMemo.monthly",
+        "com.zhangshifeng.VoiceMemo.yearly"
     ]
 
     private var transactionListener: Task<Void, Never>?
@@ -34,7 +34,9 @@ final class SubscriptionManager {
             let storeProducts = try await Product.products(for: Self.productIDs)
             products = storeProducts.sorted { $0.price < $1.price }
         } catch {
+            #if DEBUG
             print("Failed to load products: \(error)")
+            #endif
         }
     }
 
@@ -111,11 +113,11 @@ final class SubscriptionManager {
     }
 
     var monthlyProduct: Product? {
-        products.first { $0.id == "com.podnote.pro.monthly" }
+        products.first { $0.id == "com.zhangshifeng.VoiceMemo.monthly" }
     }
 
     var yearlyProduct: Product? {
-        products.first { $0.id == "com.podnote.pro.yearly" }
+        products.first { $0.id == "com.zhangshifeng.VoiceMemo.yearly" }
     }
 }
 

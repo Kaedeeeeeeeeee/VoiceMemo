@@ -18,6 +18,30 @@ export default {
       return htmlResponse(termsOfServiceHTML());
     }
 
+    // OAuth callback redirects (no auth required)
+    if (path === "/notion-callback") {
+      const code = url.searchParams.get("code");
+      const error = url.searchParams.get("error");
+      if (error) {
+        return htmlResponse("<p>授权失败: " + error + "</p>");
+      }
+      if (code) {
+        return Response.redirect(`podnote://notion-callback?code=${encodeURIComponent(code)}`, 302);
+      }
+      return htmlResponse("<p>缺少授权码</p>");
+    }
+    if (path === "/google-callback") {
+      const code = url.searchParams.get("code");
+      const error = url.searchParams.get("error");
+      if (error) {
+        return htmlResponse("<p>授权失败: " + error + "</p>");
+      }
+      if (code) {
+        return Response.redirect(`podnote://google-callback?code=${encodeURIComponent(code)}`, 302);
+      }
+      return htmlResponse("<p>缺少授权码</p>");
+    }
+
     // Verify app token
     const appToken = request.headers.get("X-App-Token");
     if (!appToken || appToken !== env.APP_AUTH_TOKEN) {
