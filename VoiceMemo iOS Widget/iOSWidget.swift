@@ -1,4 +1,5 @@
 import ActivityKit
+import AppIntents
 import WidgetKit
 import SwiftUI
 
@@ -161,35 +162,61 @@ struct RecordingLiveActivity: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: RecordingActivityAttributes.self) { context in
             // Lock Screen / Banner UI
-            HStack(spacing: 12) {
-                Circle()
-                    .fill(context.state.isPaused ? .orange : .red)
-                    .frame(width: 10, height: 10)
+            VStack(spacing: 12) {
+                HStack(spacing: 10) {
+                    Image(systemName: context.state.source == .watch ? "applewatch" : "mic.fill")
+                        .foregroundStyle(context.state.isPaused ? .orange : .red)
+                        .font(.title3)
 
-                Text(context.state.isPaused ? "已暂停" : "正在录音")
-                    .font(.subheadline)
-                    .fontWeight(.medium)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(context.state.recordingTitle)
+                            .font(.subheadline)
+                            .fontWeight(.semibold)
+                            .lineLimit(1)
+                        Text(context.state.isPaused ? "已暂停" : "正在录音")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
 
-                Spacer()
+                    Spacer()
 
-                if context.state.isPaused {
-                    Text(Duration.seconds(context.state.frozenElapsed), format: .time(pattern: .hourMinuteSecond))
-                        .font(.subheadline.monospacedDigit())
-                        .foregroundStyle(.secondary)
-                } else {
-                    Text(timerInterval: context.state.timerStartDate...(.distantFuture), countsDown: false)
-                        .font(.subheadline.monospacedDigit())
-                        .foregroundStyle(.secondary)
+                    if context.state.isPaused {
+                        Text(Duration.seconds(context.state.frozenElapsed), format: .time(pattern: .hourMinuteSecond))
+                            .font(.title3.monospacedDigit())
+                            .foregroundStyle(.primary)
+                    } else {
+                        Text(timerInterval: context.state.timerStartDate...(.distantFuture), countsDown: false)
+                            .font(.title3.monospacedDigit())
+                            .foregroundStyle(.primary)
+                    }
+                }
+
+                HStack(spacing: 10) {
+                    liveActivityButton(
+                        title: "拍照",
+                        systemImage: "camera.fill",
+                        intent: TakePhotoLiveActivityIntent(
+                            recordingId: context.attributes.recordingId,
+                            timestamp: currentElapsed(for: context.state)
+                        )
+                    )
+                    liveActivityButton(
+                        title: "添加标记",
+                        systemImage: "bookmark.fill",
+                        intent: AddMarkerLiveActivityIntent(
+                            recordingId: context.attributes.recordingId,
+                            timestamp: currentElapsed(for: context.state)
+                        )
+                    )
                 }
             }
             .padding()
             .activityBackgroundTint(.black.opacity(0.75))
         } dynamicIsland: { context in
             DynamicIsland {
-                // Expanded
                 DynamicIslandExpandedRegion(.leading) {
                     HStack(spacing: 6) {
-                        Image(systemName: context.state.isPaused ? "pause.circle.fill" : "mic.fill")
+                        Image(systemName: context.state.isPaused ? "pause.circle.fill" : (context.state.source == .watch ? "applewatch" : "mic.fill"))
                             .foregroundStyle(context.state.isPaused ? .orange : .red)
                         Text(context.state.isPaused ? "已暂停" : "正在录音")
                             .font(.subheadline)
@@ -205,8 +232,28 @@ struct RecordingLiveActivity: Widget {
                             .font(.subheadline.monospacedDigit())
                     }
                 }
+                DynamicIslandExpandedRegion(.bottom) {
+                    HStack(spacing: 10) {
+                        liveActivityButton(
+                            title: "拍照",
+                            systemImage: "camera.fill",
+                            intent: TakePhotoLiveActivityIntent(
+                                recordingId: context.attributes.recordingId,
+                                timestamp: currentElapsed(for: context.state)
+                            )
+                        )
+                        liveActivityButton(
+                            title: "添加标记",
+                            systemImage: "bookmark.fill",
+                            intent: AddMarkerLiveActivityIntent(
+                                recordingId: context.attributes.recordingId,
+                                timestamp: currentElapsed(for: context.state)
+                            )
+                        )
+                    }
+                }
             } compactLeading: {
-                Image(systemName: "mic.fill")
+                Image(systemName: context.state.source == .watch ? "applewatch" : "mic.fill")
                     .foregroundStyle(context.state.isPaused ? .orange : .red)
             } compactTrailing: {
                 if context.state.isPaused {
@@ -217,10 +264,39 @@ struct RecordingLiveActivity: Widget {
                         .font(.caption.monospacedDigit())
                 }
             } minimal: {
-                Image(systemName: "mic.fill")
+                Image(systemName: context.state.source == .watch ? "applewatch" : "mic.fill")
                     .foregroundStyle(.red)
             }
         }
+    }
+
+    /// Current timestamp used by Live Activity buttons to snapshot where the
+    /// user is in the recording at tap time. When paused the timestamp is
+    /// frozen; otherwise it's the time since `timerStartDate`.
+    private func currentElapsed(for state: RecordingActivityAttributes.ContentState) -> Double {
+        if state.isPaused {
+            return state.frozenElapsed
+        }
+        return max(0, Date.now.timeIntervalSince(state.timerStartDate))
+    }
+
+    private func liveActivityButton<Intent: AppIntent>(
+        title: String,
+        systemImage: String,
+        intent: Intent
+    ) -> some View {
+        Button(intent: intent) {
+            HStack(spacing: 6) {
+                Image(systemName: systemImage)
+                    .font(.callout)
+                Text(title)
+                    .font(.footnote.weight(.semibold))
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 8)
+        }
+        .tint(.white.opacity(0.18))
+        .foregroundStyle(.white)
     }
 }
 

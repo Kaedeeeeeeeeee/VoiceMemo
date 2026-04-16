@@ -2,7 +2,6 @@ import Foundation
 import SwiftData
 import Accelerate
 
-@MainActor
 final class EmbeddingService {
     static let shared = EmbeddingService()
 
@@ -138,7 +137,9 @@ final class EmbeddingService {
     // MARK: - API
 
     private func fetchEmbeddings(for texts: [String]) async throws -> [[Float]] {
-        let url = URL(string: "\(proxyBaseURL)/openai/v1/embeddings")!
+        guard let url = URL(string: "\(proxyBaseURL)/openai/v1/embeddings") else {
+            throw EmbeddingError.invalidResponse
+        }
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue(proxyAuthToken, forHTTPHeaderField: "X-App-Token")

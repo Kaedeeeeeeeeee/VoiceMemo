@@ -5,9 +5,9 @@ import WidgetKit
 
 struct RecordingHomeView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(PendingActionRouter.self) private var pendingActionRouter
     @State private var recorder = iOSAudioRecorder()
     @State private var showFilePicker = false
-    @State private var showTemplateAlert = false
     @State private var amplitudeHistory: [CGFloat] = Array(repeating: 0, count: 50)
     @State private var animationPhase: CGFloat = 0
     @State private var stopButtonProgress: CGFloat = 0
@@ -16,6 +16,15 @@ struct RecordingHomeView: View {
     @State private var pendingMarkers: [(timestamp: TimeInterval, text: String, photoFileName: String?)] = []
     @State private var showAddMarker = false
     @State private var markerTimestamp: TimeInterval = 0
+    @State private var markerAutoOpenCamera = false
+    // If the sheet was opened by a Live Activity action, remember which
+    // one so we can route the save to either the local pendingMarkers queue
+    // (iPhone-local recording) or the App Group pending watch markers
+    // (Watch-sourced recording in progress).
+    @State private var liveActivitySourceAction: PendingLiveActivityAction?
+    @State private var stopHoldTask: Task<Void, Never>?
+    @State private var importedFileURL: URL?
+    @State private var showImportConfirm = false
     var switchToTab: (AppTab) -> Void
     @Binding var triggerRecord: Bool
 
@@ -94,13 +103,14 @@ struct RecordingHomeView: View {
                             tint: GlassTheme.accent
                         )
                         .gesture(
-                            DragGesture(minimumDistance: 0)
+                            LongPressGesture(minimumDuration: 0.2)
                                 .onChanged { _ in
                                     if !isLongPressingStop {
                                         isLongPressingStop = true
                                         startStopHoldTimer()
                                     }
                                 }
+                                .sequenced(before: DragGesture(minimumDistance: 0))
                                 .onEnded { _ in
                                     cancelStopHold()
                                 }
@@ -124,7 +134,7 @@ struct RecordingHomeView: View {
                         .foregroundStyle(GlassTheme.textMuted)
                         .padding(.bottom, 24)
                     }
-                    .transition(.scale(scale: 0.05, anchor: .center).combined(with: .opacity))
+                    .transition(.opacity)
                 } else {
                     // Idle UI
                     VStack(spacing: 0) {
@@ -222,22 +232,10 @@ struct RecordingHomeView: View {
                             .foregroundStyle(GlassTheme.textSecondary)
                         }
                         .glassButton()
-
-                        Button {
-                            showTemplateAlert = true
-                        } label: {
-                            HStack(spacing: 8) {
-                                Image(systemName: "doc.text")
-                                Text("笔记模板")
-                            }
-                            .font(.subheadline)
-                            .foregroundStyle(GlassTheme.textSecondary)
-                        }
-                        .glassButton()
                     }
                     .padding(.bottom, 24)
                     }
-                    .transition(.scale(scale: 0.05, anchor: .center).combined(with: .opacity))
+                    .transition(.opacity)
                 }
             }
             .padding()
@@ -257,14 +255,24 @@ struct RecordingHomeView: View {
             handleImportedFile(result)
         }
         .sheet(isPresented: $showAddMarker) {
-            AddMarkerSheet(timestamp: markerTimestamp) { text, photoFileName in
-                pendingMarkers.append((timestamp: markerTimestamp, text: text, photoFileName: photoFileName))
+            AddMarkerSheet(
+                timestamp: markerTimestamp,
+                autoOpenCamera: markerAutoOpenCamera
+            ) { text, photoFileName in
+                handleMarkerSave(text: text, photoFileName: photoFileName)
+            }
+            .onDisappear {
+                markerAutoOpenCamera = false
+                liveActivitySourceAction = nil
             }
         }
-        .alert("即将上线", isPresented: $showTemplateAlert) {
-            Button("好的") { }
+        .alert("导入音频", isPresented: $showImportConfirm) {
+            Button("取消", role: .cancel) { importedFileURL = nil }
+            Button("导入并转写") { confirmImport() }
         } message: {
-            Text("笔记模板功能即将上线，敬请期待")
+            if let url = importedFileURL {
+                Text("确定导入「\(url.deletingPathExtension().lastPathComponent)」并自动开始转写？")
+            }
         }
         .onChange(of: triggerRecord) {
             if triggerRecord && !recorder.isRecording {
@@ -274,6 +282,46 @@ struct RecordingHomeView: View {
                 }
             }
         }
+        .onChange(of: pendingActionRouter.pendingMarker) { _, action in
+            guard let action else { return }
+            liveActivitySourceAction = action
+            markerTimestamp = action.timestamp
+            markerAutoOpenCamera = false
+            showAddMarker = true
+            pendingActionRouter.acknowledgeMarker()
+        }
+        .onChange(of: pendingActionRouter.pendingPhoto) { _, action in
+            guard let action else { return }
+            liveActivitySourceAction = action
+            markerTimestamp = action.timestamp
+            markerAutoOpenCamera = true
+            showAddMarker = true
+            pendingActionRouter.acknowledgePhoto()
+        }
+    }
+
+    private func handleMarkerSave(text: String, photoFileName: String?) {
+        if let sourceAction = liveActivitySourceAction,
+           recorder.activeRecordingId != sourceAction.recordingId {
+            // The live-activity action targeted a recording we don't own
+            // locally — it's a Watch-sourced recording in progress. Stash
+            // the marker in the App Group keyed by the Watch's recording
+            // id. When the audio file eventually arrives via
+            // PhoneConnectivityService.didReceive, the marker is drained
+            // and attached to the materialized Recording.
+            let pending = PendingWatchMarker(
+                recordingId: sourceAction.recordingId,
+                timestamp: sourceAction.timestamp,
+                text: text,
+                photoFileName: photoFileName
+            )
+            PendingActionStore.enqueueWatchMarker(pending)
+            return
+        }
+
+        // iPhone-local recording path (or manual marker from the bookmark
+        // button, which leaves liveActivitySourceAction nil).
+        pendingMarkers.append((timestamp: markerTimestamp, text: text, photoFileName: photoFileName))
     }
 
     private func saveRecording(url: URL, duration: TimeInterval) {
@@ -333,31 +381,36 @@ struct RecordingHomeView: View {
 
     private func startStopHoldTimer() {
         stopButtonProgress = 0
-        let startTime = Date()
 
         // Light haptic at start
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
 
-        Timer.scheduledTimer(withTimeInterval: 1.0 / 60.0, repeats: true) { timer in
-            let elapsed = Date().timeIntervalSince(startTime)
-            let progress = min(CGFloat(elapsed) / stopHoldDuration, 1.0)
-            stopButtonProgress = progress
+        // Use a smooth animation to drive the progress ring
+        withAnimation(.linear(duration: stopHoldDuration)) {
+            stopButtonProgress = 1.0
+        }
 
-            if progress >= 1.0 {
-                timer.invalidate()
-                isLongPressingStop = false
+        // Schedule completion check
+        stopHoldTask?.cancel()
+        stopHoldTask = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(Int(stopHoldDuration * 1000)))
+            guard !Task.isCancelled, isLongPressingStop else { return }
+            isLongPressingStop = false
 
-                // Strong haptic on complete
-                UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
-                UINotificationFeedbackGenerator().notificationOccurred(.success)
+            // Strong haptic on complete
+            UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
+            UINotificationFeedbackGenerator().notificationOccurred(.success)
 
-                Task { @MainActor in
-                    if let result = await recorder.stopRecording() {
-                        saveRecording(url: result.url, duration: result.duration)
-                    }
-                    withAnimation(.easeOut(duration: 0.3)) {
-                        stopButtonProgress = 0
-                    }
+            if let result = await recorder.stopRecording() {
+                withAnimation(.easeOut(duration: 0.3)) {
+                    stopButtonProgress = 0
+                }
+                // Let the UI transition animation finish before doing heavy work
+                try? await Task.sleep(for: .milliseconds(400))
+                saveRecording(url: result.url, duration: result.duration)
+            } else {
+                withAnimation(.easeOut(duration: 0.3)) {
+                    stopButtonProgress = 0
                 }
             }
         }
@@ -365,6 +418,8 @@ struct RecordingHomeView: View {
 
     private func cancelStopHold() {
         isLongPressingStop = false
+        stopHoldTask?.cancel()
+        stopHoldTask = nil
         withAnimation(.easeOut(duration: 0.3)) {
             stopButtonProgress = 0
         }
@@ -372,6 +427,12 @@ struct RecordingHomeView: View {
 
     private func handleImportedFile(_ result: Result<[URL], Error>) {
         guard case .success(let urls) = result, let sourceURL = urls.first else { return }
+        importedFileURL = sourceURL
+        showImportConfirm = true
+    }
+
+    private func confirmImport() {
+        guard let sourceURL = importedFileURL else { return }
         guard sourceURL.startAccessingSecurityScopedResource() else { return }
         defer { sourceURL.stopAccessingSecurityScopedResource() }
 
@@ -390,11 +451,15 @@ struct RecordingHomeView: View {
                 source: .phone
             )
             modelContext.insert(recording)
+
+            // Auto-transcribe imported audio
+            AutoTranscriptionManager.shared.startTranscription(for: recording)
         } catch {
             #if DEBUG
             print("Failed to import audio: \(error)")
             #endif
         }
+        importedFileURL = nil
     }
 
     // MARK: - Recording Properties & Methods
@@ -412,7 +477,8 @@ struct RecordingHomeView: View {
         let minDb: Float = -50
         let clampedPower = max(recorder.averagePower, minDb)
         let linear = CGFloat((clampedPower - minDb) / (0 - minDb))
-        return pow(linear, 2.0)
+        // Gentle curve + minimum baseline so quiet audio still shows movement
+        return 0.08 + pow(linear, 0.8) * 0.92
     }
 
     private func drawWaveform(context: GraphicsContext, size: CGSize, date: Date) {
@@ -478,7 +544,6 @@ private struct LongPressStopButton: View {
                 .stroke(tint, style: StrokeStyle(lineWidth: 4, lineCap: .round))
                 .frame(width: size + 8, height: size + 8)
                 .rotationEffect(.degrees(-90))
-                .animation(.linear(duration: 0.016), value: progress)
 
             // Stop icon
             Image(systemName: "stop.fill")

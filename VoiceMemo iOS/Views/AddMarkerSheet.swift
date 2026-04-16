@@ -3,11 +3,15 @@ import PhotosUI
 
 struct AddMarkerSheet: View {
     let timestamp: TimeInterval
+    var autoOpenCamera: Bool = false
     let onSave: (String, String?) -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var text = ""
-    @State private var selectedPhoto: PhotosPickerItem?
     @State private var photoImage: UIImage?
+    @State private var showCamera = false
+    @State private var showPhotoPicker = false
+    @State private var selectedPhotoItem: PhotosPickerItem?
+    @State private var didAutoOpen = false
 
     var body: some View {
         NavigationStack {
@@ -34,12 +38,19 @@ struct AddMarkerSheet: View {
                     .glassCard()
                     .padding(.horizontal)
 
-                // Photo picker
-                HStack {
-                    PhotosPicker(selection: $selectedPhoto, matching: .images) {
+                // Camera button — falls back to PhotosPicker on devices without a camera
+                // (simulator, Designed-for-iPad on Mac, iPads without rear camera).
+                HStack(spacing: 12) {
+                    Button {
+                        if UIImagePickerController.isSourceTypeAvailable(.camera) {
+                            showCamera = true
+                        } else {
+                            showPhotoPicker = true
+                        }
+                    } label: {
                         HStack(spacing: 8) {
-                            Image(systemName: photoImage == nil ? "photo.badge.plus" : "photo.fill")
-                            Text(photoImage == nil ? "添加照片" : "更换照片")
+                            Image(systemName: photoImage == nil ? "camera" : "camera.fill")
+                            Text(photoImage == nil ? "拍照" : "重新拍照")
                         }
                         .font(.subheadline)
                         .foregroundStyle(GlassTheme.textSecondary)
@@ -49,7 +60,6 @@ struct AddMarkerSheet: View {
                     if photoImage != nil {
                         Button {
                             photoImage = nil
-                            selectedPhoto = nil
                         } label: {
                             Image(systemName: "xmark.circle.fill")
                                 .foregroundStyle(GlassTheme.textMuted)
@@ -91,8 +101,35 @@ struct AddMarkerSheet: View {
         }
         .presentationDetents([.medium])
         .presentationBackground(.ultraThinMaterial)
-        .onChange(of: selectedPhoto) {
-            loadPhoto()
+        .fullScreenCover(isPresented: $showCamera) {
+            CameraView(image: $photoImage)
+        }
+        .photosPicker(isPresented: $showPhotoPicker, selection: $selectedPhotoItem, matching: .images)
+        .onChange(of: selectedPhotoItem) { _, newItem in
+            guard let newItem else { return }
+            Task {
+                if let data = try? await newItem.loadTransferable(type: Data.self),
+                   let uiImage = UIImage(data: data) {
+                    await MainActor.run {
+                        photoImage = uiImage
+                    }
+                }
+                await MainActor.run {
+                    selectedPhotoItem = nil
+                }
+            }
+        }
+        .onAppear {
+            // Live Activity "拍照" path: immediately trigger the camera/photo
+            // picker so the user doesn't have to tap through an extra screen.
+            if autoOpenCamera, !didAutoOpen {
+                didAutoOpen = true
+                if UIImagePickerController.isSourceTypeAvailable(.camera) {
+                    showCamera = true
+                } else {
+                    showPhotoPicker = true
+                }
+            }
         }
     }
 
@@ -100,16 +137,6 @@ struct AddMarkerSheet: View {
         let minutes = Int(timestamp) / 60
         let seconds = Int(timestamp) % 60
         return String(format: "%02d:%02d", minutes, seconds)
-    }
-
-    private func loadPhoto() {
-        guard let selectedPhoto else { return }
-        Task {
-            if let data = try? await selectedPhoto.loadTransferable(type: Data.self),
-               let image = UIImage(data: data) {
-                photoImage = image
-            }
-        }
     }
 
     private func savePhoto() -> String? {
@@ -140,6 +167,48 @@ struct AddMarkerSheet: View {
             return fileName
         } catch {
             return nil
+        }
+    }
+}
+
+// MARK: - Camera View
+
+private struct CameraView: UIViewControllerRepresentable {
+    @Binding var image: UIImage?
+    @Environment(\.presentationMode) private var presentationMode
+
+    func makeUIViewController(context: Context) -> UIImagePickerController {
+        let picker = UIImagePickerController()
+        // Defensive guard: button action already checks isSourceTypeAvailable,
+        // but in case this view is presented through another path, fall back
+        // to the photo library instead of crashing.
+        picker.sourceType = UIImagePickerController.isSourceTypeAvailable(.camera) ? .camera : .photoLibrary
+        picker.delegate = context.coordinator
+        return picker
+    }
+
+    func updateUIViewController(_ uiViewController: UIImagePickerController, context: Context) {}
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(self)
+    }
+
+    class Coordinator: NSObject, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
+        let parent: CameraView
+
+        init(_ parent: CameraView) {
+            self.parent = parent
+        }
+
+        func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]) {
+            if let uiImage = info[.originalImage] as? UIImage {
+                parent.image = uiImage
+            }
+            parent.presentationMode.wrappedValue.dismiss()
+        }
+
+        func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
+            parent.presentationMode.wrappedValue.dismiss()
         }
     }
 }

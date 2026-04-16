@@ -126,9 +126,9 @@ struct MiniPlayerBar: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 6)
-            .glassCard(radius: 20)
-            .padding(.horizontal)
-            .padding(.bottom, 2)
+            .glassCard(radius: 30)
+            .padding(.horizontal, 20)
+            .padding(.bottom, 6)
         }
         .onTapGesture {
             showFullPlayer = true

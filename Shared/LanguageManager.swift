@@ -106,16 +106,60 @@ class LanguageManager: ObservableObject {
         }
     }
 
-    /// Whether AI prompts should use English. Returns true unless the user explicitly chose Chinese.
+    /// Whether AI prompts should use English. Returns true only for English.
     var isEnglish: Bool {
         switch selectedLanguage {
         case .simplifiedChinese:
             return false
-        case .english, .japanese:
+        case .english:
             return true
+        case .japanese:
+            return false
         case .system:
-            let isChinese = Locale.current.language.languageCode?.identifier.hasPrefix("zh") ?? false
-            return !isChinese
+            let langCode = Locale.current.language.languageCode?.identifier ?? ""
+            if langCode.hasPrefix("zh") || langCode.hasPrefix("ja") {
+                return false
+            }
+            return true
+        }
+    }
+
+    /// The language name to instruct AI to respond in.
+    var aiOutputLanguage: String {
+        switch selectedLanguage {
+        case .simplifiedChinese: return "简体中文"
+        case .english: return "English"
+        case .japanese: return "日本語"
+        case .system:
+            let langCode = Locale.current.language.languageCode?.identifier ?? ""
+            if langCode.hasPrefix("zh") { return "简体中文" }
+            if langCode.hasPrefix("ja") { return "日本語" }
+            return "English"
+        }
+    }
+
+    /// The concrete language the user expects AI output in. `.system` is
+    /// resolved against the current OS locale, falling back to Chinese.
+    /// Never returns `.system`.
+    var resolvedAppLanguage: AppLanguage {
+        switch selectedLanguage {
+        case .english, .simplifiedChinese, .japanese:
+            return selectedLanguage
+        case .system:
+            let langCode = Locale.current.language.languageCode?.identifier ?? ""
+            if langCode.hasPrefix("ja") { return .japanese }
+            if langCode.hasPrefix("en") { return .english }
+            return .simplifiedChinese
+        }
+    }
+
+    /// Localized "Speaker N" prefix used for transcription speaker labels.
+    /// Callers are responsible for any surrounding punctuation (e.g. `【…】`).
+    func speakerLabel(_ id: String) -> String {
+        switch resolvedAppLanguage {
+        case .english: return "Speaker \(id)"
+        case .japanese: return "話者\(id)"
+        default: return "说话人\(id)"
         }
     }
 }

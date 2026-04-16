@@ -26,6 +26,26 @@ final class Recording {
         markers.sorted { $0.timestamp < $1.timestamp }
     }
 
+    func markersSection(markdown: Bool) -> String {
+        let sorted = sortedMarkers
+        guard !sorted.isEmpty else { return "" }
+        var lines: [String] = []
+        if markdown {
+            lines.append("## 标记")
+            lines.append("")
+            for marker in sorted {
+                lines.append("- **[\(marker.formattedTimestamp)]** \(marker.text)")
+            }
+        } else {
+            lines.append("标记")
+            lines.append("")
+            for marker in sorted {
+                lines.append("[\(marker.formattedTimestamp)] \(marker.text)")
+            }
+        }
+        return lines.joined(separator: "\n")
+    }
+
     init(
         title: String,
         date: Date = .now,
@@ -57,8 +77,16 @@ final class Recording {
         return result
     }
 
+    func reversingSpeakerNames(in text: String) -> String {
+        var result = text
+        for (original, custom) in speakerNames where !custom.isEmpty {
+            result = result.replacingOccurrences(of: "【\(custom)】", with: "【\(original)】")
+        }
+        return result
+    }
+
     static func extractSpeakers(from text: String) -> [String] {
-        guard let regex = try? NSRegularExpression(pattern: "【(说话人\\d+)】") else { return [] }
+        guard let regex = try? NSRegularExpression(pattern: "【(说话人[A-Z\\d]+)】") else { return [] }
         let matches = regex.matches(in: text, range: NSRange(text.startIndex..., in: text))
         var seen = Set<String>()
         var speakers: [String] = []

@@ -1,9 +1,6 @@
 import WatchConnectivity
 import Observation
-
-extension Notification.Name {
-    static let fileTransferCompleted = Notification.Name("fileTransferCompleted")
-}
+import SwiftData
 
 @Observable
 final class WatchConnectivityService: NSObject, WCSessionDelegate {
@@ -13,6 +10,7 @@ final class WatchConnectivityService: NSObject, WCSessionDelegate {
     var isCompanionAppInstalled = false
     var transferProgress: Double = 0
     var lastTransferError: String?
+    @ObservationIgnored var modelContainer: ModelContainer?
     private var wcSession: WCSession?
 
     override init() {
@@ -29,6 +27,57 @@ final class WatchConnectivityService: NSObject, WCSessionDelegate {
             #if DEBUG
             print("⚠️ WCSession not supported")
             #endif
+        }
+    }
+
+    /// Tell the paired iPhone that recording just started on the Watch,
+    /// so the iPhone can put up a Live Activity as a remote-control surface.
+    /// We prefer `sendMessage` (low latency when reachable) and fall back
+    /// to `transferUserInfo` (queued, guaranteed delivery).
+    func notifyRecordingStarted(recordingId: String, title: String, timerStartDate: Date) {
+        let payload: [String: Any] = [
+            "command": "watchRecordingStarted",
+            "recordingId": recordingId,
+            "title": title,
+            "timerStartDate": timerStartDate.timeIntervalSince1970
+        ]
+        send(payload)
+    }
+
+    func notifyRecordingPaused(recordingId: String, frozenElapsed: TimeInterval) {
+        send([
+            "command": "watchRecordingPaused",
+            "recordingId": recordingId,
+            "frozenElapsed": frozenElapsed
+        ])
+    }
+
+    func notifyRecordingResumed(recordingId: String, timerStartDate: Date) {
+        send([
+            "command": "watchRecordingResumed",
+            "recordingId": recordingId,
+            "timerStartDate": timerStartDate.timeIntervalSince1970
+        ])
+    }
+
+    func notifyRecordingStopped(recordingId: String) {
+        send([
+            "command": "watchRecordingStopped",
+            "recordingId": recordingId
+        ])
+    }
+
+    private func send(_ payload: [String: Any]) {
+        guard let session = wcSession, session.activationState == .activated else { return }
+        if session.isReachable {
+            session.sendMessage(payload, replyHandler: nil) { error in
+                #if DEBUG
+                print("⚠️ [Watch] sendMessage failed, falling back: \(error.localizedDescription)")
+                #endif
+                session.transferUserInfo(payload)
+            }
+        } else {
+            session.transferUserInfo(payload)
         }
     }
 
@@ -140,15 +189,16 @@ final class WatchConnectivityService: NSObject, WCSessionDelegate {
 
         Task { @MainActor in
             self.lastTransferError = error?.localizedDescription
-        }
 
-        NotificationCenter.default.post(
-            name: .fileTransferCompleted,
-            object: nil,
-            userInfo: [
-                "recordingId": recordingId ?? "",
-                "success": success
-            ]
-        )
+            guard success, let recordingId, let container = self.modelContainer else { return }
+            let context = ModelContext(container)
+            let descriptor = FetchDescriptor<Recording>(
+                predicate: #Predicate { $0.id.uuidString == recordingId }
+            )
+            if let rec = try? context.fetch(descriptor).first {
+                rec.isSynced = true
+                try? context.save()
+            }
+        }
     }
 }

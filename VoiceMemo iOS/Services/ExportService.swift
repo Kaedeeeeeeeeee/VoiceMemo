@@ -116,6 +116,22 @@ enum ExportService {
             files.append(("summary.md", Data(summary.utf8)))
         }
 
+        // Markers
+        let markers = recording.sortedMarkers
+        if !markers.isEmpty {
+            var markerLines: [String] = []
+            for marker in markers {
+                markerLines.append("[\(marker.formattedTimestamp)] \(marker.text)")
+            }
+            files.append(("markers.txt", Data(markerLines.joined(separator: "\n").utf8)))
+
+            for marker in markers {
+                if let photoFileName = marker.photoFileName, let data = marker.photoData {
+                    files.append(("markers/\(photoFileName)", data))
+                }
+            }
+        }
+
         guard !files.isEmpty, let zipData = ZIPBuilder.build(files: files) else { return nil }
         let fileName = "\(recording.title).zip"
         let url = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
@@ -165,6 +181,12 @@ enum ExportService {
                 }
                 lines.append(markdown ? summary : stripMarkdown(summary))
             }
+        }
+
+        let markersText = recording.markersSection(markdown: markdown)
+        if !markersText.isEmpty {
+            lines.append("")
+            lines.append(markersText)
         }
     }
 

@@ -1,4 +1,3 @@
-import ActivityKit
 import AVFoundation
 import Observation
 
@@ -15,7 +14,10 @@ final class iOSAudioRecorder: NSObject {
     private var recordedFrames: AVAudioFrameCount = 0
     private var recordingSampleRate: Double = 44100.0
 
-    private var currentActivity: Activity<RecordingActivityAttributes>?
+    // Stable identifier for the in-flight recording, used by the Live Activity
+    // so intents fired from its buttons can route pending markers back to the
+    // correct Recording once the model is persisted in saveRecording().
+    private(set) var activeRecordingId: String?
     private var accumulatedTimeBeforePause: TimeInterval = 0
 
     override init() {
@@ -102,7 +104,14 @@ final class iOSAudioRecorder: NSObject {
 
             audioEngine = engine
             accumulatedTimeBeforePause = 0
-            startLiveActivity()
+
+            let recordingId = UUID().uuidString
+            activeRecordingId = recordingId
+            RecordingLiveActivityController.shared.start(
+                recordingId: recordingId,
+                title: Date.now.recordingTitle,
+                source: .phone
+            )
             return url
         } catch {
             #if DEBUG
@@ -127,7 +136,8 @@ final class iOSAudioRecorder: NSObject {
         isPaused = false
         currentTime = 0
         averagePower = 0
-        endLiveActivity()
+        RecordingLiveActivityController.shared.end(frozenElapsed: duration)
+        activeRecordingId = nil
 
         audioEngine = nil
         recordingURL = nil
@@ -149,12 +159,12 @@ final class iOSAudioRecorder: NSObject {
     func pauseRecording() {
         isPaused = true
         accumulatedTimeBeforePause = currentTime
-        updateLiveActivity(isPaused: true)
+        RecordingLiveActivityController.shared.update(isPaused: true, accumulatedElapsed: accumulatedTimeBeforePause)
     }
 
     func resumeRecording() {
         isPaused = false
-        updateLiveActivity(isPaused: false)
+        RecordingLiveActivityController.shared.update(isPaused: false, accumulatedElapsed: accumulatedTimeBeforePause)
     }
 
     @MainActor
@@ -177,51 +187,6 @@ final class iOSAudioRecorder: NSObject {
 
         let alpha: Float = 0.2
         self.averagePower = (alpha * db) + ((1.0 - alpha) * self.averagePower)
-    }
-
-    // MARK: - Live Activity
-
-    private func startLiveActivity() {
-        guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
-        let attributes = RecordingActivityAttributes()
-        let state = RecordingActivityAttributes.ContentState(
-            isPaused: false,
-            timerStartDate: .now,
-            frozenElapsed: 0
-        )
-        do {
-            currentActivity = try Activity.request(
-                attributes: attributes,
-                content: .init(state: state, staleDate: nil)
-            )
-        } catch {
-            #if DEBUG
-            print("Failed to start Live Activity: \(error)")
-            #endif
-        }
-    }
-
-    private func updateLiveActivity(isPaused: Bool) {
-        let state = RecordingActivityAttributes.ContentState(
-            isPaused: isPaused,
-            timerStartDate: isPaused ? .now : .now.addingTimeInterval(-accumulatedTimeBeforePause),
-            frozenElapsed: isPaused ? accumulatedTimeBeforePause : 0
-        )
-        Task {
-            await currentActivity?.update(.init(state: state, staleDate: nil))
-        }
-    }
-
-    private func endLiveActivity() {
-        let state = RecordingActivityAttributes.ContentState(
-            isPaused: true,
-            timerStartDate: .now,
-            frozenElapsed: accumulatedTimeBeforePause
-        )
-        Task {
-            await currentActivity?.end(.init(state: state, staleDate: nil), dismissalPolicy: .immediate)
-            currentActivity = nil
-        }
     }
 
     static func newRecordingURL() -> URL {

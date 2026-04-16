@@ -2,6 +2,7 @@ import SwiftUI
 
 struct MainTabView: View {
     @State private var selectedTab: AppTab = .home
+    @Environment(PendingActionRouter.self) private var pendingActionRouter
     @Binding var triggerRecord: Bool
 
     var body: some View {
@@ -35,6 +36,12 @@ struct MainTabView: View {
             if triggerRecord {
                 selectedTab = .home
             }
+        }
+        .onChange(of: pendingActionRouter.pendingMarker) { _, new in
+            if new != nil { selectedTab = .home }
+        }
+        .onChange(of: pendingActionRouter.pendingPhoto) { _, new in
+            if new != nil { selectedTab = .home }
         }
     }
 }

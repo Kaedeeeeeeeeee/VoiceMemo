@@ -11,16 +11,10 @@ struct RecordingDetailView: View {
     @State private var cloudSyncMessage: String?
 
     private var tabTitles: [String] {
-        var tabs = ["转写", "摘要", "对话"]
-        if !recording.markers.isEmpty {
-            tabs.insert("标记", at: 2)
-        }
-        return tabs
+        [String(localized: "录音笔记"), String(localized: "摘要"), String(localized: "对话")]
     }
 
-    private var conversationTabIndex: Int {
-        recording.markers.isEmpty ? 2 : 3
-    }
+    private var conversationTabIndex: Int { 2 }
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -36,20 +30,22 @@ struct RecordingDetailView: View {
                 }
             } else {
                 VStack(spacing: 0) {
-                    // Glass tab selector
-                    glassTabSelector
-                        .padding(.horizontal)
-                        .padding(.top, 8)
+                    // Tab selector
+                    Picker("", selection: $selectedTab) {
+                        ForEach(Array(tabTitles.enumerated()), id: \.offset) { index, title in
+                            Text(LocalizedStringKey(title)).tag(index)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .padding(.horizontal)
+                    .padding(.top, 8)
 
                     // Tab content (lazy — only builds the selected tab)
                     Group {
                         switch selectedTab {
                         case 0: TranscriptView(recording: recording)
                         case 1: SummaryView(recording: recording)
-                        case 2 where !recording.markers.isEmpty:
-                            MarkerListView(recording: recording)
-                        case conversationTabIndex:
-                            AIConversationView(recording: recording)
+                        case 2: AIConversationView(recording: recording)
                         default: TranscriptView(recording: recording)
                         }
                     }
@@ -79,8 +75,8 @@ struct RecordingDetailView: View {
 
                     if let transcription = recording.transcription {
                         Divider()
-                        ShareLink(item: recording.applyingSpeakerNames(to: transcription)) {
-                            Label("分享转写文本", systemImage: "doc.text")
+                        ShareLink(item: transcriptionShareText) {
+                            Label("分享录音笔记文本", systemImage: "doc.text")
                         }
                         Button {
                             guard TrialManager.shared.claimTrialIfNeeded(for: recording) else {
@@ -88,17 +84,17 @@ struct RecordingDetailView: View {
                                 return
                             }
                             let text = recording.applyingSpeakerNames(to: transcription)
-                            if let url = PDFRenderer.render(title: recording.title, content: text, type: "转写") {
+                            if let url = PDFRenderer.render(title: recording.title, content: text, type: "转写", markers: recording.sortedMarkers) {
                                 shareItems = [url]
                             }
                         } label: {
-                            Label("分享转写 PDF", systemImage: "doc.richtext")
+                            Label("分享录音笔记 PDF", systemImage: "doc.richtext")
                         }
                     }
 
                     if let summary = recording.summary {
                         Divider()
-                        ShareLink(item: summary) {
+                        ShareLink(item: summaryShareText) {
                             Label("分享摘要文本", systemImage: "text.quote")
                         }
                         Button {
@@ -106,7 +102,7 @@ struct RecordingDetailView: View {
                                 showPaywall = true
                                 return
                             }
-                            if let url = PDFRenderer.render(title: recording.title, content: summary, type: "摘要") {
+                            if let url = PDFRenderer.render(title: recording.title, content: summary, type: "摘要", markers: recording.sortedMarkers) {
                                 shareItems = [url]
                             }
                         } label: {
@@ -280,30 +276,6 @@ struct RecordingDetailView: View {
         }
     }
 
-    private var glassTabSelector: some View {
-        HStack(spacing: 0) {
-            ForEach(Array(tabTitles.enumerated()), id: \.offset) { index, title in
-                Button {
-                    selectedTab = index
-                } label: {
-                    Text(LocalizedStringKey(title))
-                        .font(.subheadline)
-                        .fontWeight(selectedTab == index ? .semibold : .regular)
-                        .foregroundStyle(selectedTab == index ? GlassTheme.textPrimary : GlassTheme.textMuted)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 10)
-                        .background(
-                            selectedTab == index ?
-                                GlassTheme.surfaceMedium : Color.clear,
-                            in: RoundedRectangle(cornerRadius: 12)
-                        )
-                }
-                .buttonStyle(.plain)
-            }
-        }
-        .padding(4)
-        .glassCard(radius: 16)
-    }
 
     private var audioFileURL: URL {
         let documentsDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
@@ -320,13 +292,34 @@ struct RecordingDetailView: View {
         }
     }
 
+    private var transcriptionShareText: String {
+        guard let transcription = recording.transcription else { return "" }
+        var text = recording.applyingSpeakerNames(to: transcription)
+        let markers = recording.markersSection(markdown: false)
+        if !markers.isEmpty { text += "\n\n" + markers }
+        return text
+    }
+
+    private var summaryShareText: String {
+        guard let summary = recording.summary else { return "" }
+        var text = summary
+        let markers = recording.markersSection(markdown: false)
+        if !markers.isEmpty { text += "\n\n" + markers }
+        return text
+    }
+
     private var exportText: String {
+        var text: String
         if let summary = recording.summary {
-            return summary
+            text = summary
         } else if let transcription = recording.transcription {
-            return recording.applyingSpeakerNames(to: transcription)
+            text = recording.applyingSpeakerNames(to: transcription)
+        } else {
+            return ""
         }
-        return ""
+        let markers = recording.markersSection(markdown: true)
+        if !markers.isEmpty { text += "\n\n" + markers }
+        return text
     }
 
     private func sendToApp(_ app: IntegrationApp) {

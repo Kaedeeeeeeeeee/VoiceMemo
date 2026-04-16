@@ -10,8 +10,7 @@ struct RecordingView: View {
     @State private var amplitudeHistory: [CGFloat] = Array(repeating: 0, count: 20)
     @State private var animationPhase: CGFloat = 0
     @State private var stopButtonProgress: CGFloat = 0
-    @State private var isLongPressingStop = false
-    @State private var showCompletionMessage = false
+    @State private var isHoldingStop = false
     var autoStart = false
 
     private let stopHoldDuration: CGFloat = 1.5
@@ -28,38 +27,13 @@ struct RecordingView: View {
         ZStack {
             WatchGlassTheme.background.ignoresSafeArea()
 
-            if showCompletionMessage {
-                // Completion screen
-                VStack(spacing: 12) {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 40))
-                        .foregroundStyle(.green)
-
-                    Text("录音已保存")
-                        .font(.headline)
-                        .foregroundStyle(WatchGlassTheme.textPrimary)
-
-                    Text("请前往 iPhone 或 Mac 查看")
-                        .font(.caption)
-                        .foregroundStyle(WatchGlassTheme.textTertiary)
-                        .multilineTextAlignment(.center)
-
-                    Button {
-                        dismiss()
-                    } label: {
-                        Text("完成")
-                            .font(.subheadline)
-                    }
-                    .buttonStyle(.glass)
-                    .padding(.top, 8)
-                }
-                .padding()
-            } else {
-                VStack(spacing: 8) {
+            VStack(spacing: 6) {
                     // Timer display
                     Text(formattedTime)
-                        .font(.system(size: 40, weight: .light, design: .monospaced))
+                        .font(.system(size: 34, weight: .light, design: .monospaced))
                         .foregroundStyle(WatchGlassTheme.textPrimary)
+                        .minimumScaleFactor(0.7)
+                        .lineLimit(1)
 
                     // Recording status capsule
                     if recorder.isRecording {
@@ -79,7 +53,7 @@ struct RecordingView: View {
                         Canvas { context, size in
                             drawWaveform(context: context, size: size)
                         }
-                        .frame(height: 40)
+                        .frame(height: 28)
                         .onChange(of: timeline.date) {
                             animationPhase += 0.05
                         }
@@ -92,12 +66,18 @@ struct RecordingView: View {
                             .foregroundStyle(WatchGlassTheme.textMuted)
                     }
 
-                    Spacer()
-
-                    // Controls
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal)
+                .padding(.top, 4)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .safeAreaInset(edge: .bottom, spacing: 0) {
                     HStack(spacing: 20) {
                         if recorder.isRecording {
-                            // Pause/Resume button
+                            // Pause/Resume button.
+                            // The .glass button style adds its own padding around
+                            // the label — to land at a ~44pt visual diameter
+                            // matching the stop button, keep the icon frame small.
                             Button {
                                 if recorder.isPaused {
                                     recorder.resumeRecording()
@@ -106,25 +86,33 @@ struct RecordingView: View {
                                 }
                             } label: {
                                 Image(systemName: recorder.isPaused ? "play.fill" : "pause.fill")
-                                    .font(.title2)
-                                    .frame(width: 44, height: 44)
+                                    .font(.system(size: 18, weight: .semibold))
+                                    .frame(width: 20, height: 20)
                             }
                             .buttonStyle(.glass)
                             .buttonBorderShape(.circle)
 
-                            // Stop button (long press)
+                            // Stop button (long press).
+                            // Uses the high-level onLongPressGesture modifier because
+                            // watchOS delivers unreliable .onEnded events for composed
+                            // LongPress+Drag sequences — `pressing:` is the only
+                            // callback the system guarantees to fire on release.
                             WatchLongPressStopButton(progress: stopButtonProgress, size: 44)
-                                .gesture(
-                                    DragGesture(minimumDistance: 0)
-                                        .onChanged { _ in
-                                            if !isLongPressingStop {
-                                                isLongPressingStop = true
-                                                startStopHoldTimer()
-                                            }
-                                        }
-                                        .onEnded { _ in
+                                .frame(width: 44, height: 44)
+                                .contentShape(Rectangle())
+                                .onLongPressGesture(
+                                    minimumDuration: stopHoldDuration,
+                                    maximumDistance: 200,
+                                    perform: {
+                                        completeStopHold()
+                                    },
+                                    onPressingChanged: { pressing in
+                                        if pressing {
+                                            startStopHoldTimer()
+                                        } else {
                                             cancelStopHold()
                                         }
+                                    }
                                 )
                         } else {
                             // Record button
@@ -141,9 +129,10 @@ struct RecordingView: View {
                             .accessibilityLabel("开始录音")
                         }
                     }
+                    .fixedSize()
+                    .frame(maxWidth: .infinity)
+                    .padding(.bottom, 4)
                 }
-                .padding()
-            }
         }
         .toolbar(.hidden, for: .navigationBar)
         .onChange(of: normalizedPower) {
@@ -207,6 +196,10 @@ struct RecordingView: View {
     }
 
     private func stopAndSave() {
+        // Capture the active recording id before stopRecording() clears it —
+        // the iPhone uses this id to correlate the incoming file with the
+        // Live Activity session and any pending lock-screen markers.
+        let liveActivityRecordingId = recorder.activeRecordingId
         guard let result = recorder.stopRecording() else { return }
 
         let fileSize = (try? FileManager.default.attributesOfItem(atPath: result.url.path)[.size] as? Int64) ?? 0
@@ -219,80 +212,76 @@ struct RecordingView: View {
             source: .watch
         )
         modelContext.insert(recording)
+        try? modelContext.save()
 
-        let recordingId = recording.id.uuidString
-
-        // Listen for transfer completion
-        let context = modelContext
-        NotificationCenter.default.addObserver(
-            forName: .fileTransferCompleted,
-            object: nil,
-            queue: .main
-        ) { notification in
-            guard let userInfo = notification.userInfo,
-                  let notifId = userInfo["recordingId"] as? String,
-                  notifId == recordingId,
-                  let success = userInfo["success"] as? Bool,
-                  success else { return }
-
-            let descriptor = FetchDescriptor<Recording>(predicate: #Predicate { $0.id.uuidString == recordingId })
-            if let rec = try? context.fetch(descriptor).first {
-                rec.isSynced = true
-                try? context.save()
-            }
-        }
-
-        // Send to iPhone
-        let metadata: [String: Any] = [
-            "id": recordingId,
+        // Send to iPhone — sync-flag flip is handled by WatchConnectivityService
+        // when the transfer finishes, so this view no longer needs a notification
+        // observer (previous implementation leaked observers and captured a
+        // view-scoped model context that crashed after dismissal).
+        var metadata: [String: Any] = [
+            "id": recording.id.uuidString,
             "title": recording.title,
             "duration": recording.duration,
             "date": recording.date.timeIntervalSince1970,
             "fileSize": fileSize
         ]
+        if let liveActivityRecordingId {
+            metadata["liveActivityRecordingId"] = liveActivityRecordingId
+        }
         WatchConnectivityService.shared.sendRecording(url: result.url, metadata: metadata)
 
-        // Show completion message instead of dismissing
-        withAnimation {
-            showCompletionMessage = true
-        }
+        // Dismiss back to the recordings list. The new recording will show up
+        // there automatically via @Query, so the list itself is the confirmation.
+        // We intentionally avoid an in-view "完成" screen because toggling the
+        // ZStack branches right as the AVAudioSession deactivates caused watchOS
+        // to render the post-stop view as a black void.
+        dismiss()
     }
 
     // MARK: - Long Press Stop
+    //
+    // Visual progress is driven by a single SwiftUI animation so Core
+    // Animation interpolates at display refresh rate. The actual stop
+    // trigger is owned by .onLongPressGesture(perform:), which the system
+    // fires exactly when minimumDuration has been reached.
 
     private func startStopHoldTimer() {
-        stopButtonProgress = 0
-        let startTime = Date()
+        isHoldingStop = true
+
+        // Reset without animation, then drive the ring to 1 over the hold duration.
+        var txn = Transaction()
+        txn.disablesAnimations = true
+        withTransaction(txn) {
+            stopButtonProgress = 0
+        }
 
         // Light haptic at start
         WKInterfaceDevice.current().play(.click)
 
-        Timer.scheduledTimer(withTimeInterval: 1.0 / 60.0, repeats: true) { timer in
-            let elapsed = Date().timeIntervalSince(startTime)
-            let progress = min(CGFloat(elapsed) / stopHoldDuration, 1.0)
-            stopButtonProgress = progress
-
-            if progress >= 1.0 {
-                timer.invalidate()
-                isLongPressingStop = false
-
-                // Strong haptic on complete
-                WKInterfaceDevice.current().play(.success)
-
-                stopAndSave()
-
-                withAnimation(.easeOut(duration: 0.3)) {
-                    stopButtonProgress = 0
-                }
-            }
+        withAnimation(.linear(duration: stopHoldDuration)) {
+            stopButtonProgress = 1.0
         }
     }
 
     private func cancelStopHold() {
-        isLongPressingStop = false
+        // If the press already completed, don't undo the visual state —
+        // completeStopHold() + showCompletionMessage own it now.
+        guard isHoldingStop else { return }
+        isHoldingStop = false
         withAnimation(.easeOut(duration: 0.3)) {
             stopButtonProgress = 0
         }
+    }
+
+    private func completeStopHold() {
+        isHoldingStop = false
+        // The linear animation is already at (or near) 1.0; leave it there so
+        // the ring stays full while we transition to the completion screen.
+
+        // Strong haptic on complete
+        WKInterfaceDevice.current().play(.success)
+
+        stopAndSave()
     }
 }
 
@@ -313,7 +302,6 @@ private struct WatchLongPressStopButton: View {
                 .stroke(WatchGlassTheme.accent, style: StrokeStyle(lineWidth: 3, lineCap: .round))
                 .frame(width: size + 6, height: size + 6)
                 .rotationEffect(.degrees(-90))
-                .animation(.linear(duration: 0.016), value: progress)
 
             Image(systemName: "stop.fill")
                 .font(.title2)

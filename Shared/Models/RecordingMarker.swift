@@ -27,4 +27,15 @@ final class RecordingMarker {
         let seconds = Int(timestamp) % 60
         return String(format: "%02d:%02d", minutes, seconds)
     }
+
+    var photoURL: URL? {
+        guard let photoFileName else { return nil }
+        let documentsDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        return documentsDir.appendingPathComponent(photoFileName)
+    }
+
+    var photoData: Data? {
+        guard let photoURL else { return nil }
+        return try? Data(contentsOf: photoURL)
+    }
 }

@@ -2,7 +2,7 @@ import UIKit
 import SwiftUI
 
 enum PDFRenderer {
-    static func render(title: String, content: String, type: String) -> URL? {
+    static func render(title: String, content: String, type: String, markers: [RecordingMarker] = []) -> URL? {
         let pageWidth: CGFloat = 612
         let pageHeight: CGFloat = 792
         let margin: CGFloat = 40
@@ -113,6 +113,41 @@ enum PDFRenderer {
                     drawText(bullet + text, font: bulletFont, color: textColor, indent: indent, spacingAfter: 4)
                 } else {
                     drawText(trimmed, font: bodyFont, color: textColor, spacingAfter: 6)
+                }
+            }
+
+            // Markers section
+            if !markers.isEmpty {
+                cursorY += 12
+                ensureSpace(10)
+                let separatorPath = UIBezierPath()
+                separatorPath.move(to: CGPoint(x: margin, y: cursorY))
+                separatorPath.addLine(to: CGPoint(x: pageWidth - margin, y: cursorY))
+                UIColor.lightGray.setStroke()
+                separatorPath.lineWidth = 0.5
+                separatorPath.stroke()
+                cursorY += 16
+
+                drawText("标记", font: h2Font, color: textColor, spacingAfter: 8)
+
+                for marker in markers {
+                    drawText("[\(marker.formattedTimestamp)] \(marker.text)", font: bodyFont, color: textColor, spacingAfter: 4)
+
+                    if let data = marker.photoData, let image = UIImage(data: data) {
+                        let maxImageWidth = contentWidth
+                        let maxImageHeight: CGFloat = 300
+                        let aspectRatio = image.size.width / image.size.height
+                        var drawWidth = min(maxImageWidth, image.size.width)
+                        var drawHeight = drawWidth / aspectRatio
+                        if drawHeight > maxImageHeight {
+                            drawHeight = maxImageHeight
+                            drawWidth = drawHeight * aspectRatio
+                        }
+                        ensureSpace(drawHeight + 8)
+                        let imageRect = CGRect(x: margin, y: cursorY, width: drawWidth, height: drawHeight)
+                        image.draw(in: imageRect)
+                        cursorY += drawHeight + 8
+                    }
                 }
             }
         }

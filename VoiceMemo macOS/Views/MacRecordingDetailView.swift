@@ -40,7 +40,9 @@ struct MacRecordingDetailView: View {
                 Menu {
                     if let transcription = recording.transcription {
                         Button {
-                            let text = recording.applyingSpeakerNames(to: transcription)
+                            var text = recording.applyingSpeakerNames(to: transcription)
+                            let markers = recording.markersSection(markdown: false)
+                            if !markers.isEmpty { text += "\n\n" + markers }
                             NSPasteboard.general.clearContents()
                             NSPasteboard.general.setString(text, forType: .string)
                         } label: {
@@ -49,7 +51,7 @@ struct MacRecordingDetailView: View {
 
                         Button {
                             let text = recording.applyingSpeakerNames(to: transcription)
-                            exportPDF(title: recording.title, content: text, type: "转写")
+                            exportPDF(title: recording.title, content: text, type: "转写", markers: recording.sortedMarkers)
                         } label: {
                             Label("导出转写 PDF", systemImage: "doc.richtext")
                         }
@@ -58,14 +60,17 @@ struct MacRecordingDetailView: View {
                     if let summary = recording.summary {
                         Divider()
                         Button {
+                            var text = summary
+                            let markers = recording.markersSection(markdown: false)
+                            if !markers.isEmpty { text += "\n\n" + markers }
                             NSPasteboard.general.clearContents()
-                            NSPasteboard.general.setString(summary, forType: .string)
+                            NSPasteboard.general.setString(text, forType: .string)
                         } label: {
                             Label("复制摘要文本", systemImage: "doc.on.doc")
                         }
 
                         Button {
-                            exportPDF(title: recording.title, content: summary, type: "摘要")
+                            exportPDF(title: recording.title, content: summary, type: "摘要", markers: recording.sortedMarkers)
                         } label: {
                             Label("导出摘要 PDF", systemImage: "doc.richtext")
                         }
@@ -179,8 +184,8 @@ struct MacRecordingDetailView: View {
         return String(format: "%d:%02d", minutes, seconds)
     }
 
-    private func exportPDF(title: String, content: String, type: String) {
-        guard let url = MacPDFRenderer.render(title: title, content: content, type: type) else { return }
+    private func exportPDF(title: String, content: String, type: String, markers: [RecordingMarker] = []) {
+        guard let url = MacPDFRenderer.render(title: title, content: content, type: type, markers: markers) else { return }
         let panel = NSSavePanel()
         panel.nameFieldStringValue = "\(title)_\(type).pdf"
         panel.allowedContentTypes = [.pdf]

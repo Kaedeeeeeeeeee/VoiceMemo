@@ -108,6 +108,51 @@ final class PhoneConnectivityService: NSObject, WCSessionDelegate {
         }
     }
 
+    // MARK: - Messages from Watch (recording lifecycle events)
+
+    nonisolated func session(_ session: WCSession, didReceiveMessage message: [String: Any]) {
+        handleWatchMessage(message)
+    }
+
+    nonisolated func session(_ session: WCSession, didReceiveUserInfo userInfo: [String: Any]) {
+        handleWatchMessage(userInfo)
+    }
+
+    nonisolated private func handleWatchMessage(_ message: [String: Any]) {
+        guard let command = message["command"] as? String else { return }
+        #if DEBUG
+        print("📥 [iOS] Received Watch command: \(command)")
+        #endif
+
+        Task { @MainActor in
+            switch command {
+            case "watchRecordingStarted":
+                guard let recordingId = message["recordingId"] as? String else { return }
+                let title = message["title"] as? String ?? "Watch 录音"
+                let startInterval = message["timerStartDate"] as? TimeInterval ?? Date.now.timeIntervalSince1970
+                let startDate = Date(timeIntervalSince1970: startInterval)
+                RecordingLiveActivityController.shared.start(
+                    recordingId: recordingId,
+                    title: title,
+                    source: .watch,
+                    timerStartDate: startDate
+                )
+            case "watchRecordingPaused":
+                let frozen = message["frozenElapsed"] as? TimeInterval ?? 0
+                RecordingLiveActivityController.shared.update(isPaused: true, accumulatedElapsed: frozen)
+            case "watchRecordingResumed":
+                let startInterval = message["timerStartDate"] as? TimeInterval ?? Date.now.timeIntervalSince1970
+                let resumedElapsed = max(0, Date.now.timeIntervalSince1970 - startInterval)
+                RecordingLiveActivityController.shared.update(isPaused: false, accumulatedElapsed: resumedElapsed)
+            case "watchRecordingStopped":
+                let elapsed = RecordingLiveActivityController.shared.currentElapsed() ?? 0
+                RecordingLiveActivityController.shared.end(frozenElapsed: elapsed)
+            default:
+                break
+            }
+        }
+    }
+
     nonisolated func session(_ session: WCSession, didReceive file: WCSessionFile) {
         let metadata = file.metadata ?? [:]
         let sourceURL = file.fileURL

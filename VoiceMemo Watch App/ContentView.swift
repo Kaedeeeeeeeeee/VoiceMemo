@@ -79,7 +79,6 @@ struct ContentView: View {
                     }
                 }
                 .buttonStyle(.plain)
-                .watchGlassCard()
             }
             .onDelete { indexSet in
                 if let index = indexSet.first {

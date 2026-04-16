@@ -167,7 +167,9 @@ final class TranscriptionService {
     // MARK: - Upload audio file with progress
 
     private func uploadAudio(fileURL: URL) async throws -> String {
-        let url = URL(string: "\(proxyBaseURL)/assemblyai/upload")!
+        guard let url = URL(string: "\(proxyBaseURL)/assemblyai/upload") else {
+            throw TranscriptionError.invalidResponse
+        }
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue(proxyAuthToken, forHTTPHeaderField: "X-App-Token")
@@ -216,7 +218,9 @@ final class TranscriptionService {
     // MARK: - Request transcription with speaker diarization
 
     private func requestTranscription(uploadURL: String) async throws -> String {
-        let url = URL(string: "\(proxyBaseURL)/assemblyai/transcript")!
+        guard let url = URL(string: "\(proxyBaseURL)/assemblyai/transcript") else {
+            throw TranscriptionError.invalidResponse
+        }
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue(proxyAuthToken, forHTTPHeaderField: "X-App-Token")
@@ -256,7 +260,9 @@ final class TranscriptionService {
     // MARK: - Poll for result
 
     private func pollForResult(id: String) async throws -> [[String: Any]] {
-        let url = URL(string: "\(proxyBaseURL)/assemblyai/transcript/\(id)")!
+        guard let url = URL(string: "\(proxyBaseURL)/assemblyai/transcript/\(id)") else {
+            throw TranscriptionError.invalidResponse
+        }
         pollingElapsedSeconds = 0
 
         while true {
@@ -312,13 +318,14 @@ final class TranscriptionService {
                   let text = utterance["text"] as? String else { return nil }
 
             if speakerMap[speaker] == nil {
-                let label = String(UnicodeScalar("A".unicodeScalars.first!.value + UInt32(nextLabel))!)
+                let scalar = UnicodeScalar(UInt32(UnicodeScalar("A").value) + UInt32(nextLabel))
+                let label = scalar.map { String($0) } ?? String(nextLabel)
                 speakerMap[speaker] = label
                 nextLabel += 1
             }
 
-            let displayLabel = speakerMap[speaker]!
-            let prefix = LanguageManager.shared.isEnglish ? "【Speaker \(displayLabel)】" : "【说话人\(displayLabel)】"
+            let displayLabel = speakerMap[speaker, default: "?"]
+            let prefix = "【" + LanguageManager.shared.speakerLabel(displayLabel) + "】"
 
             // Format timestamp from utterance start time (milliseconds)
             var timestamp = ""
@@ -344,12 +351,13 @@ final class TranscriptionService {
                   let text = utterance["text"] as? String else { return nil }
 
             if speakerMap[speaker] == nil {
-                let label = String(UnicodeScalar("A".unicodeScalars.first!.value + UInt32(nextLabel))!)
+                let scalar = UnicodeScalar(UInt32(UnicodeScalar("A").value) + UInt32(nextLabel))
+                let label = scalar.map { String($0) } ?? String(nextLabel)
                 speakerMap[speaker] = label
                 nextLabel += 1
             }
 
-            let displayLabel = speakerMap[speaker]!
+            let displayLabel = speakerMap[speaker, default: "?"]
             let startMs = utterance["start"] as? Int ?? 0
             let endMs = utterance["end"] as? Int ?? startMs
 

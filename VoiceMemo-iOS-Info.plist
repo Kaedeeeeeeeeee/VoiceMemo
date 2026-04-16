@@ -24,5 +24,7 @@
 	<true/>
 	<key>NSRemindersUsageDescription</key>
 	<string>PodNote 需要访问提醒事项以创建录音相关的提醒。</string>
+	<key>NSCameraUsageDescription</key>
+	<string>PodNote 需要使用相机来为录音标记拍摄照片。</string>
 </dict>
 </plist>

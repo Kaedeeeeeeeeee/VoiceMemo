@@ -5,10 +5,16 @@ import AVFoundation
 @main
 struct VoiceMemoWatchApp: App {
     @State private var shouldStartRecording = false
+    private let sharedModelContainer: ModelContainer
 
     init() {
-        // Pre-warm WCSession so it's ready when RecordingView needs it
-        _ = WatchConnectivityService.shared
+        let container = try! ModelContainer(for: Recording.self, RecordingMarker.self)
+        self.sharedModelContainer = container
+
+        // Pre-warm WCSession so it's ready when RecordingView needs it, and
+        // give it the shared container so file-transfer completions can mark
+        // recordings as synced without relying on view-scoped model contexts.
+        WatchConnectivityService.shared.modelContainer = container
 
         // Pre-warm BackgroundRecordingManager for call recording
         _ = BackgroundRecordingManager.shared
@@ -34,7 +40,7 @@ struct VoiceMemoWatchApp: App {
                 handleCallRecordingCompleted(notification)
             }
         }
-        .modelContainer(for: Recording.self)
+        .modelContainer(sharedModelContainer)
     }
 
     @MainActor
@@ -52,9 +58,7 @@ struct VoiceMemoWatchApp: App {
             source: .watch
         )
 
-        // Insert into SwiftData via shared model container
-        guard let container = try? ModelContainer(for: Recording.self) else { return }
-        let context = container.mainContext
+        let context = sharedModelContainer.mainContext
         context.insert(recording)
         try? context.save()
 

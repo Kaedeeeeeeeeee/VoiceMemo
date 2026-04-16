@@ -6,7 +6,6 @@ import SwiftData
 private enum RecordingFilter: String, CaseIterable {
     case all = "全部"
     case hasSummary = "已摘要"
-    case favorites = "收藏"
     case watch = "Watch"
 }
 
@@ -31,6 +30,8 @@ struct RecordingHistoryView: View {
     @State private var renameText = ""
     @State private var recordingToDelete: Recording?
     @State private var selectedRecording: Recording?
+    @FocusState private var isSearchFieldFocused: Bool
+    @Namespace private var searchAnimation
     var switchToTab: (AppTab) -> Void
 
     private var filteredRecordings: [Recording] {
@@ -46,8 +47,6 @@ struct RecordingHistoryView: View {
         case .all: break
         case .hasSummary:
             result = result.filter { $0.summary != nil }
-        case .favorites:
-            break // No favorites feature yet
         case .watch:
             result = result.filter { $0.source == .watch }
         }
@@ -80,32 +79,27 @@ struct RecordingHistoryView: View {
         }
     }
 
+    private var hasAnyRecordings: Bool {
+        !recordings.isEmpty
+    }
+
     var body: some View {
         ZStack {
             RadialBackgroundView()
 
-            if filteredRecordings.isEmpty {
-                emptyState
-            } else {
-                recordingsList
-            }
-        }
-        .navigationTitle("历史记录")
-        .navigationBarTitleDisplayMode(.large)
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        isSearching.toggle()
-                        if !isSearching { searchText = "" }
-                    }
-                } label: {
-                    Image(systemName: isSearching ? "xmark" : "magnifyingglass")
-                        .foregroundStyle(GlassTheme.textSecondary)
+            VStack(spacing: 0) {
+                customHeader
+
+                if recordings.isEmpty {
+                    Spacer()
+                    emptyState
+                    Spacer()
+                } else {
+                    recordingsList
                 }
             }
         }
-        .toolbarBackground(.hidden, for: .navigationBar)
+        .toolbar(.hidden, for: .navigationBar)
         .alert("确认删除", isPresented: .init(
             get: { recordingToDelete != nil },
             set: { if !$0 { recordingToDelete = nil } }
@@ -154,41 +148,90 @@ struct RecordingHistoryView: View {
         }
     }
 
+    // MARK: - Custom Header
+
+    private var customHeader: some View {
+        HStack(spacing: 12) {
+            if !isSearching {
+                Text("历史记录")
+                    .font(.largeTitle)
+                    .fontWeight(.bold)
+                    .foregroundStyle(GlassTheme.textPrimary)
+                    .transition(.opacity.combined(with: .scale(scale: 0.8, anchor: .leading)))
+            }
+
+            Spacer(minLength: 0)
+
+            if isSearching {
+                HStack(spacing: 8) {
+                    Image(systemName: "magnifyingglass")
+                        .font(.subheadline)
+                        .foregroundStyle(GlassTheme.textMuted)
+                        .rotationEffect(.degrees(-90))
+                        .matchedGeometryEffect(id: "searchIcon", in: searchAnimation)
+
+                    TextField("搜索录音", text: $searchText)
+                        .font(.subheadline)
+                        .foregroundStyle(GlassTheme.textPrimary)
+                        .tint(GlassTheme.accent)
+                        .focused($isSearchFieldFocused)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
+                .glassCard(radius: 12)
+                .transition(.asymmetric(
+                    insertion: .opacity.combined(with: .move(edge: .trailing)),
+                    removal: .opacity.combined(with: .move(edge: .trailing))
+                ))
+
+                Button {
+                    dismissSearch()
+                } label: {
+                    Text("取消")
+                        .font(.subheadline)
+                        .foregroundStyle(GlassTheme.textSecondary)
+                }
+                .transition(.opacity)
+            }
+
+            if !isSearching {
+                Button {
+                    activateSearch()
+                } label: {
+                    Image(systemName: "magnifyingglass")
+                        .foregroundStyle(GlassTheme.textSecondary)
+                        .matchedGeometryEffect(id: "searchIcon", in: searchAnimation)
+                }
+                .transition(.opacity)
+            }
+        }
+        .padding(.horizontal)
+        .padding(.top, 8)
+        .padding(.bottom, 4)
+        .animation(.spring(response: 0.4, dampingFraction: 0.78), value: isSearching)
+    }
+
+    private func activateSearch() {
+        withAnimation(.spring(response: 0.4, dampingFraction: 0.78)) {
+            isSearching = true
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            isSearchFieldFocused = true
+        }
+    }
+
+    private func dismissSearch() {
+        isSearchFieldFocused = false
+        withAnimation(.spring(response: 0.4, dampingFraction: 0.78)) {
+            isSearching = false
+            searchText = ""
+        }
+    }
+
     // MARK: - List
 
     private var recordingsList: some View {
         VStack(spacing: 0) {
-            // Search bar
-            if isSearching {
-                HStack(spacing: 10) {
-                    HStack(spacing: 8) {
-                        Image(systemName: "magnifyingglass")
-                            .font(.subheadline)
-                            .foregroundStyle(GlassTheme.textMuted)
-                        TextField("搜索录音", text: $searchText)
-                            .font(.subheadline)
-                            .foregroundStyle(GlassTheme.textPrimary)
-                            .tint(GlassTheme.accent)
-                    }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 10)
-                    .glassCard(radius: 12)
-
-                    Button {
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            searchText = ""
-                            isSearching = false
-                        }
-                    } label: {
-                        Text("取消")
-                            .font(.subheadline)
-                            .foregroundStyle(GlassTheme.textSecondary)
-                    }
-                }
-                .padding(.horizontal)
-                .transition(.move(edge: .top).combined(with: .opacity))
-            }
-
             // Filter chips
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
@@ -209,6 +252,19 @@ struct RecordingHistoryView: View {
             .padding(.bottom, 8)
 
             // Grouped recordings
+            if filteredRecordings.isEmpty {
+                Spacer()
+                VStack(spacing: 16) {
+                    Image(systemName: "line.3.horizontal.decrease.circle")
+                        .font(.system(size: 36))
+                        .foregroundStyle(GlassTheme.textMuted)
+                    Text("没有符合条件的录音")
+                        .font(.subheadline)
+                        .foregroundStyle(GlassTheme.textSecondary)
+                }
+                .frame(maxWidth: .infinity)
+                Spacer()
+            } else {
             List {
                 let groups = groupedRecordings()
                 ForEach(groups, id: \.0) { group, items in
@@ -257,6 +313,7 @@ struct RecordingHistoryView: View {
             .navigationDestination(item: $selectedRecording) { recording in
                 RecordingDetailView(recording: recording)
             }
+            } // end else
         }
     }
 
